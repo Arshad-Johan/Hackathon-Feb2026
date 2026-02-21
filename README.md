@@ -10,15 +10,17 @@ A high-throughput, intelligent routing engine that categorizes support tickets, 
 
 - **Classifier:** Routes tickets into **Billing**, **Technical**, or **Legal**. Urgency from transformer-based sentiment (continuous score S ∈ [0, 1]); regex baseline in tests.
 - **Queue:** Redis-backed processed queue (workers push classified tickets; API pops by urgency). Background worker (ARQ) does classification + sentiment.
-- **API:** FastAPI with CORS. **POST /tickets** returns **202 Accepted** with `job_id`; worker enqueues when done. Endpoints: submit ticket, pop/peek next, queue size, list queue (read-only), clear queue, health.
+- **API:** FastAPI with CORS. **POST /tickets** returns **202 Accepted** with `job_id`; worker enqueues when done. **POST /tickets/batch** accepts multiple tickets and returns 202 with one `job_id` per ticket. Endpoints: submit (single/batch), pop/peek next, queue size, list queue (read-only), clear queue, **GET /activity** (recent backend events), health.
+- **Activity:** In-memory activity log plus Redis pub/sub; worker publishes **ticket_processed** so the API can expose a unified event stream (accepted, processed, popped, queue cleared).
 - **Data:** Redis for job queue and processed list; no DB/file persistence for ticket content.
 
 ### Frontend
 
 - **Stack:** React 18, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query. UI built with shadcn-style components (Button, Input, Card, Badge, etc.).
 - **Pages:**
-  - **Submit ticket** — Form (Ticket ID, Subject, Body, optional Customer ID); validation; on success shows category, urgency, and priority score.
+  - **Submit ticket** — Single or multiple tickets (add/remove rows); submit one or batch. Form: Ticket ID, Subject, Body, optional Customer ID; on success shows accepted ticket(s) with `job_id`.
   - **Queue** — Queue size, full list of waiting tickets in priority order, **Pop next** and **Clear queue** actions; auto-refresh.
+  - **Activity** — Live backend event log (ticket accepted, processed by worker, popped, queue cleared); polls every 2s.
 - **RBAC-ready:** Auth context and `RequireAuth` wrapper are in place for future admin/user roles and role-based access; no login yet.
 - **API client:** Typed client with configurable base URL and optional auth token getter for when auth is added.
 
@@ -89,6 +91,7 @@ Then open **http://localhost:5173** in your browser. The UI talks to the API at 
 | API docs          | http://localhost:8000/docs |
 | Frontend          | `cd frontend` → `npm install` → `npm run dev` |
 | Web UI            | http://localhost:5173 |
+| Activity (UI)     | http://localhost:5173/activity |
 
 Set `REDIS_URL` if Redis is not on localhost (e.g. `REDIS_URL=redis://localhost:6379/0`). Optional: set `WEBHOOK_URL` (Slack or Discord webhook) to notify when urgency score S > 0.8.
 
@@ -99,11 +102,13 @@ Set `REDIS_URL` if Redis is not on localhost (e.g. `REDIS_URL=redis://localhost:
 | Method   | Endpoint        | Description |
 |----------|-----------------|-------------|
 | `POST`   | `/tickets`      | Submit ticket (JSON). Returns **202 Accepted** with `ticket_id`, `job_id`; worker enqueues when done. |
+| `POST`   | `/tickets/batch`| Submit multiple tickets (JSON array). Returns **202** with `accepted: [{ ticket_id, job_id }, ...]`. |
 | `GET`    | `/tickets/next` | Pop next highest-urgency ticket from processed queue. |
 | `GET`    | `/tickets/peek` | Peek next without removing. |
 | `GET`    | `/queue/size`   | Processed queue length. |
 | `GET`    | `/queue`        | List all waiting tickets in priority order (read-only). |
 | `DELETE` | `/queue`        | Clear processed queue. |
+| `GET`    | `/activity`     | Recent backend activity (`?limit=100`). Events: ticket_accepted, ticket_processed, ticket_popped, queue_cleared. |
 | `GET`    | `/health`       | Health check. |
 | `POST`   | `/urgency-score`| Test transformer only (body: `{"text":"..."}`). |
 
@@ -140,7 +145,7 @@ Or use `python scripts/run_tests_live.py` to start the server, run tests, then s
 
 ## Project layout
 
-- `app/` — FastAPI app: `main.py`, `models.py`, `classifier.py`, `queue_store.py`, `broker.py`, `config.py`, `sentiment.py`, `worker.py`
+- `app/` — FastAPI app: `main.py`, `models.py`, `classifier.py`, `queue_store.py`, `broker.py`, `config.py`, `sentiment.py`, `worker.py`, `activity.py`, `webhook.py`
 - `frontend/` — React SPA (Vite, TypeScript, Tailwind)
 - `tests/` — Unit and API tests
 - `scripts/` — Helpers (e.g. run tests against live server)

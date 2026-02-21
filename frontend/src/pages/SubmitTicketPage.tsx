@@ -16,11 +16,8 @@ const emptyForm: IncomingTicket = {
 
 function AcceptedCard({ accepted }: { accepted: TicketAccepted }) {
   return (
-    <Card className="mt-6 border-emerald-200 bg-emerald-50/50">
-      <CardHeader>
-        <CardTitle className="text-lg">Accepted for processing</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
+    <Card className="border-emerald-200 bg-emerald-50/50">
+      <CardContent className="pt-4">
         <p className="text-sm text-slate-600">
           <span className="font-medium">Ticket ID:</span> {accepted.ticket_id}
         </p>
@@ -28,104 +25,209 @@ function AcceptedCard({ accepted }: { accepted: TicketAccepted }) {
           <span className="font-medium">Job ID:</span>{" "}
           <code className="rounded bg-slate-200 px-1 text-xs">{accepted.job_id}</code>
         </p>
-        <p className="text-sm text-slate-600">{accepted.message}</p>
-        <p className="mt-2 text-xs text-slate-500">
-          The ticket will be classified in the background. Check the Queue page to see it once
-          processed.
-        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TicketFormRow({
+  index,
+  form,
+  onChange,
+  onRemove,
+  canRemove,
+}: {
+  index: number;
+  form: IncomingTicket;
+  onChange: (f: IncomingTicket) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  return (
+    <Card className="border-slate-200">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base">Ticket #{index + 1}</CardTitle>
+        {canRemove && (
+          <Button type="button" variant="outline" size="sm" onClick={onRemove}>
+            Remove
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>Ticket ID *</Label>
+          <Input
+            value={form.ticket_id}
+            onChange={(e) => onChange({ ...form, ticket_id: e.target.value })}
+            placeholder="e.g. T-001"
+            maxLength={100}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Subject *</Label>
+          <Input
+            value={form.subject}
+            onChange={(e) => onChange({ ...form, subject: e.target.value })}
+            placeholder="Brief subject line"
+            maxLength={200}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Body *</Label>
+          <textarea
+            className="flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+            value={form.body}
+            onChange={(e) => onChange({ ...form, body: e.target.value })}
+            placeholder="Describe the issue..."
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Customer ID (optional)</Label>
+          <Input
+            value={form.customer_id ?? ""}
+            onChange={(e) => onChange({ ...form, customer_id: e.target.value })}
+            placeholder="e.g. C-123"
+          />
+        </div>
       </CardContent>
     </Card>
   );
 }
 
 export function SubmitTicketPage() {
-  const [form, setForm] = useState<IncomingTicket>(emptyForm);
-  const [lastAccepted, setLastAccepted] = useState<TicketAccepted | null>(null);
+  const [forms, setForms] = useState<IncomingTicket[]>([{ ...emptyForm }]);
+  const [lastAccepted, setLastAccepted] = useState<TicketAccepted[]>([]);
   const { toast } = useToast();
 
-  const submitMutation = useMutation({
+  const submitSingleMutation = useMutation({
     mutationFn: api.submitTicket,
     onSuccess: (data) => {
-      setLastAccepted(data);
+      setLastAccepted([data]);
       toast("success", `Ticket ${data.ticket_id} accepted for processing.`);
-      setForm(emptyForm);
+      setForms([{ ...emptyForm }]);
     },
     onError: (err: Error) => {
       toast("error", err.message);
     },
   });
 
+  const submitBatchMutation = useMutation({
+    mutationFn: api.submitTicketsBatch,
+    onSuccess: (data) => {
+      setLastAccepted(data.accepted);
+      const n = data.accepted.length;
+      toast("success", `${n} ticket${n === 1 ? "" : "s"} accepted for processing.`);
+      setForms([{ ...emptyForm }]);
+    },
+    onError: (err: Error) => {
+      toast("error", err.message);
+    },
+  });
+
+  const updateForm = (index: number, next: IncomingTicket) => {
+    setForms((prev) => {
+      const copy = [...prev];
+      copy[index] = next;
+      return copy;
+    });
+  };
+
+  const addTicket = () => setForms((prev) => [...prev, { ...emptyForm }]);
+  const removeTicket = (index: number) => {
+    setForms((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const buildPayload = (form: IncomingTicket): IncomingTicket => ({
+    ticket_id: form.ticket_id.trim(),
+    subject: form.subject.trim(),
+    body: form.body.trim(),
+    customer_id: form.customer_id?.trim() || undefined,
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const payload: IncomingTicket = {
-      ticket_id: form.ticket_id.trim(),
-      subject: form.subject.trim(),
-      body: form.body.trim(),
-      customer_id: form.customer_id?.trim() || undefined,
-    };
-    if (!payload.ticket_id || !payload.subject || !payload.body) {
-      toast("error", "Ticket ID, Subject, and Body are required.");
+    const payloads = forms.map(buildPayload).filter((p) => p.ticket_id && p.subject && p.body);
+    const invalid = forms.some(
+      (f) =>
+        !f.ticket_id.trim() ||
+        !f.subject.trim() ||
+        !f.body.trim()
+    );
+    if (forms.length > 1 && invalid) {
+      toast("error", "Fill Ticket ID, Subject, and Body for every ticket, or remove empty rows.");
       return;
     }
-    if (payload.ticket_id.length > 100 || payload.subject.length > 200) {
-      toast("error", "Ticket ID or Subject too long.");
+    if (forms.length === 1) {
+      const p = buildPayload(forms[0]);
+      if (!p.ticket_id || !p.subject || !p.body) {
+        toast("error", "Ticket ID, Subject, and Body are required.");
+        return;
+      }
+      if (p.ticket_id.length > 100 || p.subject.length > 200) {
+        toast("error", "Ticket ID or Subject too long.");
+        return;
+      }
+      submitSingleMutation.mutate(p);
       return;
     }
-    submitMutation.mutate(payload);
+    if (payloads.length === 0) {
+      toast("error", "Add at least one ticket with Ticket ID, Subject, and Body.");
+      return;
+    }
+    for (const p of payloads) {
+      if (p.ticket_id.length > 100 || p.subject.length > 200) {
+        toast("error", "Ticket ID or Subject too long in one of the tickets.");
+        return;
+      }
+    }
+    submitBatchMutation.mutate(payloads);
   };
+
+  const isPending = submitSingleMutation.isPending || submitBatchMutation.isPending;
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Submit a ticket</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Submit tickets</h1>
       <p className="mt-1 text-sm text-slate-600">
-        Enter ticket details. The engine will classify and prioritize it.
+        Add one or more tickets. Submit a single ticket or submit all at once for batch processing.
       </p>
       <form onSubmit={handleSubmit} className="mt-6 space-y-4 max-w-xl">
-        <div className="space-y-2">
-          <Label htmlFor="ticket_id">Ticket ID *</Label>
-          <Input
-            id="ticket_id"
-            value={form.ticket_id}
-            onChange={(e) => setForm((f) => ({ ...f, ticket_id: e.target.value }))}
-            placeholder="e.g. T-001"
-            maxLength={100}
-          />
+        <div className="space-y-4">
+          {forms.map((form, index) => (
+            <TicketFormRow
+              key={index}
+              index={index}
+              form={form}
+              onChange={(next) => updateForm(index, next)}
+              onRemove={() => removeTicket(index)}
+              canRemove={forms.length > 1}
+            />
+          ))}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="subject">Subject *</Label>
-          <Input
-            id="subject"
-            value={form.subject}
-            onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-            placeholder="Brief subject line"
-            maxLength={200}
-          />
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={addTicket}>
+            Add another ticket
+          </Button>
+          <Button type="submit" disabled={isPending}>
+            {isPending ? "Submitting…" : forms.length === 1 ? "Submit ticket" : "Submit all tickets"}
+          </Button>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="body">Body *</Label>
-          <textarea
-            id="body"
-            className="flex min-h-[120px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
-            value={form.body}
-            onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-            placeholder="Describe the issue..."
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="customer_id">Customer ID (optional)</Label>
-          <Input
-            id="customer_id"
-            value={form.customer_id ?? ""}
-            onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value }))}
-            placeholder="e.g. C-123"
-          />
-        </div>
-        <Button type="submit" disabled={submitMutation.isPending}>
-          {submitMutation.isPending ? "Submitting…" : "Submit ticket"}
-        </Button>
       </form>
-      {lastAccepted && <AcceptedCard accepted={lastAccepted} />}
+      {lastAccepted.length > 0 && (
+        <div className="mt-6 space-y-2">
+          <h2 className="text-lg font-medium text-slate-900">
+            Accepted for processing ({lastAccepted.length})
+          </h2>
+          <p className="text-xs text-slate-500">
+            Tickets will be classified in the background. Check the Queue page once processed.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {lastAccepted.map((a) => (
+              <AcceptedCard key={a.job_id} accepted={a} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

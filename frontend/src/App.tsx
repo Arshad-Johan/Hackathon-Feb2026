@@ -7,6 +7,7 @@ import { Layout } from "@/components/Layout";
 import { RequireAuth } from "@/components/RequireAuth";
 import { SubmitTicketPage } from "@/pages/SubmitTicketPage";
 import { QueuePage } from "@/pages/QueuePage";
+import { ActivityPage } from "@/pages/ActivityPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { useEffect } from "react";
 
@@ -37,6 +38,7 @@ function AppRoutes() {
             </RequireAuth>
           }
         />
+        <Route path="activity" element={<ActivityPage />} />
         <Route path="login" element={<LoginPage />} />
       </Route>
     </Routes>

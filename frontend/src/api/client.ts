@@ -63,11 +63,22 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+export interface BatchTicketsAccepted {
+  accepted: TicketAccepted[];
+}
+
 export const api = {
   submitTicket(payload: IncomingTicket) {
     return request<TicketAccepted>("/tickets", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+  /** Submit multiple tickets in one request; returns 202 with list of accepted tickets. */
+  submitTicketsBatch(payloads: IncomingTicket[]) {
+    return request<BatchTicketsAccepted>("/tickets/batch", {
+      method: "POST",
+      body: JSON.stringify(payloads),
     });
   },
   getNextTicket() {
@@ -88,4 +99,14 @@ export const api = {
   health() {
     return request<{ status: string }>("/health");
   },
+  /** Recent backend activity (ticket accepted, processed, popped, queue cleared). */
+  getActivity(limit = 100) {
+    return request<{ events: ActivityEvent[] }>(`/activity?limit=${limit}`);
+  },
 };
+
+export interface ActivityEvent {
+  ts: number;
+  type: string;
+  data: Record<string, unknown>;
+}

@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { to: "/", label: "Submit ticket" },
   { to: "/queue", label: "Queue" },
+  { to: "/activity", label: "Activity" },
 ];
 
 export function Layout() {

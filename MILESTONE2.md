@@ -13,6 +13,8 @@ This document describes **Milestone 2**: production-grade reliability, transform
   - API pops from the processed queue via **GET /tickets/next** (highest urgency first).
 - **Concurrency:** Redis **ZPOPMAX** is atomic; multiple workers and 10+ simultaneous requests at the same time are safe. No duplicate processing; ARQ job queue and Redis sorted set handle distribution.
 - **Integration:** Optional **Slack/Discord webhook**. When **S > 0.8**, the worker POSTs a mock payload to `WEBHOOK_URL` (env). Fire-and-forget; does not fail the job if the webhook fails.
+- **Batch submission:** **POST /tickets/batch** accepts an array of tickets and returns **202 Accepted** with one `job_id` per ticket; each is enqueued for processing.
+- **Activity stream:** **GET /activity** returns recent backend events (ticket accepted, ticket processed by worker, ticket popped, queue cleared). The API keeps an in-memory log; the worker publishes **ticket_processed** via Redis pub/sub so the Activity tab shows end-to-end flow.
 
 ---
 
@@ -71,11 +73,13 @@ python -m app.worker
 | Method   | Endpoint         | Description |
 |----------|------------------|-------------|
 | `POST`   | `/tickets`       | Submit ticket (JSON). Returns **202 Accepted** with `ticket_id`, `job_id`; worker enqueues when done. |
+| `POST`   | `/tickets/batch` | Submit multiple tickets (JSON array). Returns **202 Accepted** with `accepted: [{ ticket_id, job_id }, ...]` in same order. |
 | `GET`    | `/tickets/next`  | Pop next highest-urgency ticket from processed queue. 404 if empty. |
 | `GET`    | `/tickets/peek` | Peek next without removing. |
 | `GET`    | `/queue/size`   | Processed queue length. |
 | `GET`    | `/queue`        | List all waiting tickets in priority order (read-only). |
 | `DELETE` | `/queue`        | Clear processed queue. |
+| `GET`    | `/activity`     | Recent backend activity (query `?limit=100`). Returns `{ events: [{ ts, type, data }, ...] }`. |
 | `GET`    | `/health`       | Health check. |
 | `POST`   | `/urgency-score`| Test transformer only (body: `{"text":"..."}`). Returns `urgency_score` S and `is_urgent` (S ≥ 0.5). |
 
@@ -88,6 +92,16 @@ curl -X POST http://localhost:8000/tickets \
 ```
 
 Response: **202** and `{"ticket_id":"T-001","job_id":"...","message":"Accepted for processing"}`.
+
+**Example — submit multiple tickets (batch):**
+
+```bash
+curl -X POST http://localhost:8000/tickets/batch \
+  -H "Content-Type: application/json" \
+  -d '[{"ticket_id":"T-001","subject":"Login broken","body":"Cannot login."},{"ticket_id":"T-002","subject":"Wrong invoice","body":"Charged twice."}]'
+```
+
+Response: **202** and `{"accepted":[{"ticket_id":"T-001","job_id":"...","message":"Accepted for processing"},{"ticket_id":"T-002","job_id":"...","message":"Accepted for processing"}]}`.
 
 **After the worker runs (a few seconds), get the classified ticket:**
 
@@ -139,8 +153,9 @@ pytest tests/test_milestone1.py tests/test_async_broker.py -v
 
 From **frontend** directory: `npm install` then `npm run dev`. Open http://localhost:5173.
 
-- **Submit ticket:** Shows “Accepted for processing” with `ticket_id` and `job_id` (202 flow).
+- **Submit ticket:** Single-ticket form or **Add another ticket** for batch; submit one or all. Shows “Accepted for processing” with `ticket_id` and `job_id` (202 flow).
 - **Queue:** Lists tickets with **Urgency S** and **High (webhook)** badge when S > 0.8.
+- **Activity:** Live view of backend events (ticket accepted, processed by worker, popped, queue cleared). Polls **GET /activity** every 2s.
 
 ---
 
