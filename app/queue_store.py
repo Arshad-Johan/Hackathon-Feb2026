@@ -61,6 +61,12 @@ def peek() -> Optional[RoutedTicket]:
     return routed
 
 
+def list_snapshot() -> List[RoutedTicket]:
+    """Return current queue contents in priority order (read-only; does not mutate)."""
+    sorted_entries = sorted(_heap, key=lambda e: (e[0], e[1]))
+    return [routed for _neg_priority, _order, routed in sorted_entries]
+
+
 def clear() -> None:
     """Clear the queue (e.g. for tests)."""
     global _heap, _counter
