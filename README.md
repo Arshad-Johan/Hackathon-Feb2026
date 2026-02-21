@@ -19,34 +19,55 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Run
+## Run (async broker: Redis + worker)
+
+**1. Start Redis** (required):
+
+```bash
+docker run -d -p 6379:6379 --name redis redis
+```
+
+**2. Start API** (terminal 1):
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+**3. Start worker** (terminal 2):
+
+```bash
+python -m app.worker
+```
+
+Or: `arq app.worker.WorkerSettings`
+
 API docs: **http://localhost:8000/docs**
 
-## API
+Set `REDIS_URL` if Redis is not on localhost (e.g. `REDIS_URL=redis://localhost:6379/0`).
 
-| Method   | Endpoint        | Description                                              |
-|----------|-----------------|----------------------------------------------------------|
-| `POST`   | `/tickets`      | Submit ticket (JSON). Returns classified + urgency; enqueues. |
-| `GET`    | `/tickets/next`| Pop next highest-priority ticket.                       |
-| `GET`    | `/tickets/peek`| Peek next without removing.                             |
-| `GET`    | `/queue/size`  | Current queue length.                                   |
-| `DELETE` | `/queue`       | Clear queue.                                             |
-| `GET`    | `/health`      | Health check.                                            |
+## API (async broker)
+
+| Method   | Endpoint        | Description |
+|----------|-----------------|-------------|
+| `POST`   | `/tickets`      | **202 Accepted** with `ticket_id`, `job_id`. Worker processes in background. |
+| `GET`    | `/tickets/next` | Pop next highest-urgency (by S) ticket. 404 if empty. |
+| `GET`    | `/tickets/peek` | Peek next without removing. |
+| `GET`    | `/queue/size`  | Number of **processed** tickets ready to dequeue. |
+| `DELETE` | `/queue`       | Clear processed queue. |
+| `GET`    | `/health`       | Health check. |
+| `POST`   | `/urgency-score`| Test transformer only (body: `{"text":"..."}`). |
 
 ### Example
 
 ```bash
+# Submit — returns 202 immediately with job_id
 curl -X POST http://localhost:8000/tickets \
   -H "Content-Type: application/json" \
   -d '{"ticket_id":"T-001","subject":"Login broken ASAP","body":"Cannot login. Need fix ASAP."}'
-```
 
-Response includes `category`, `is_urgent`, and `priority_score`; the ticket is stored in the priority queue.
+# After a few seconds (worker processes), get next ticket
+curl http://localhost:8000/tickets/next
+```
 
 ## Testing Milestone 1
 

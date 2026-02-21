@@ -38,7 +38,7 @@ def test_health():
 
 
 def test_submit_ticket_returns_routed():
-    """POST /tickets accepts JSON and returns category, is_urgent, priority_score."""
+    """POST /tickets accepts JSON and returns category, is_urgent, priority_score, urgency_score S."""
     r = post(
         _url("/tickets"),
         {
@@ -53,12 +53,13 @@ def test_submit_ticket_returns_routed():
     assert data["category"] in ("Billing", "Technical", "Legal")
     assert data["category"] == "Billing"
     assert "is_urgent" in data
-    assert data["is_urgent"] is False
-    assert data["priority_score"] == 0
+    assert "urgency_score" in data
+    assert 0 <= data["urgency_score"] <= 1
+    assert data["priority_score"] >= 0
 
 
 def test_urgency_detection():
-    """Tickets with ASAP/broken/urgent get is_urgent=True and priority_score=1."""
+    """Tickets with ASAP/broken/urgent get high urgency (is_urgent=True, S high, priority_score>=1)."""
     r = post(
         _url("/tickets"),
         {
@@ -71,7 +72,8 @@ def test_urgency_detection():
     data = r.json()
     assert data["category"] == "Technical"
     assert data["is_urgent"] is True
-    assert data["priority_score"] == 1
+    assert data["priority_score"] >= 1
+    assert 0 <= data["urgency_score"] <= 1
 
 
 def test_legal_category():

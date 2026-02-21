@@ -2,3 +2,7 @@ fastapi==0.109.2
 uvicorn[standard]==0.27.1
 pydantic==2.6.1
 pytest==7.4.4
+transformers>=4.36.0
+torch>=2.0.0
+redis>=5.0.0
+arq>=0.25.0
