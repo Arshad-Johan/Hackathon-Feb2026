@@ -12,6 +12,8 @@ function TicketRow({ ticket }: { ticket: RoutedTicket }) {
       : ticket.category === "Billing"
         ? "billing"
         : "legal";
+  const urgencyScore = typeof ticket.urgency_score === "number" ? ticket.urgency_score : null;
+  const highUrgency = urgencyScore != null && urgencyScore > 0.8;
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50/50">
       <td className="py-3 px-4 text-sm font-medium text-slate-900">
@@ -29,7 +31,14 @@ function TicketRow({ ticket }: { ticket: RoutedTicket }) {
         )}
       </td>
       <td className="py-3 px-4 text-sm font-medium text-slate-700">
-        {ticket.priority_score}
+        {urgencyScore != null ? urgencyScore.toFixed(2) : ticket.priority_score}
+      </td>
+      <td className="py-3 px-4">
+        {highUrgency ? (
+          <Badge variant="urgent" className="text-xs">S&gt;0.8</Badge>
+        ) : (
+          <span className="text-slate-400 text-sm">—</span>
+        )}
       </td>
     </tr>
   );
@@ -148,7 +157,10 @@ export function QueuePage() {
                       Urgent
                     </th>
                     <th className="py-3 px-4 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Priority
+                      Urgency S
+                    </th>
+                    <th className="py-3 px-4 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                      High (webhook)
                     </th>
                   </tr>
                 </thead>

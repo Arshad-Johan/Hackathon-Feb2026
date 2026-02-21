@@ -37,3 +37,17 @@ class RoutedTicket(BaseModel):
         description="Higher = more urgent; used for queue ordering",
         ge=0,
     )
+    urgency_score: float = Field(
+        ...,
+        description="Continuous sentiment-based urgency S in [0, 1] (transformer regression)",
+        ge=0.0,
+        le=1.0,
+    )
+
+
+class TicketAccepted(BaseModel):
+    """Response for 202 Accepted: ticket accepted for async processing."""
+
+    ticket_id: str
+    job_id: str = Field(..., description="Unique job id for this processing task")
+    message: str = Field(default="Accepted for processing")

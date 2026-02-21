@@ -3,12 +3,13 @@
 import heapq
 from typing import List, Optional
 
-from app.classifier import classify
+from app.classifier import _match_category
 from app.models import IncomingTicket, RoutedTicket
+from app.sentiment import compute_urgency_score
 
 
-# Heap entries: (negated_priority, insertion_order, RoutedTicket)
-# heapq is min-heap; we want high priority first, so we negate.
+# Heap entries: (negated_urgency_score, insertion_order, RoutedTicket)
+# heapq is min-heap; we want higher S first, so we negate S.
 _heap: List[tuple] = []
 _counter = 0
 
@@ -20,10 +21,12 @@ def _next_order() -> int:
 
 
 def enqueue(ticket: IncomingTicket) -> RoutedTicket:
-    """Classify ticket, compute priority, and push onto the priority queue."""
-    category, is_urgent, priority_score = classify(
-        ticket.ticket_id, ticket.subject, ticket.body, ticket.customer_id
-    )
+    """Classify category (baseline), compute urgency S (transformer), push onto priority queue."""
+    text = f"{ticket.subject} {ticket.body}"
+    category = _match_category(text)
+    S = compute_urgency_score(text)
+    is_urgent = S >= 0.5
+    priority_score = min(10, int(round(S * 10)))
     routed = RoutedTicket(
         ticket_id=ticket.ticket_id,
         subject=ticket.subject,
@@ -32,19 +35,19 @@ def enqueue(ticket: IncomingTicket) -> RoutedTicket:
         category=category,
         is_urgent=is_urgent,
         priority_score=priority_score,
+        urgency_score=S,
     )
-    # Min-heap: higher priority first => store (-priority_score, order, item)
     order = _next_order()
-    entry = (-routed.priority_score, order, routed)
+    entry = (-routed.urgency_score, order, routed)
     heapq.heappush(_heap, entry)
     return routed
 
 
 def dequeue() -> Optional[RoutedTicket]:
-    """Pop the highest-priority ticket from the queue. Returns None if empty."""
+    """Pop the highest-urgency ticket (by S) from the queue. Returns None if empty."""
     if not _heap:
         return None
-    _neg_priority, _order, routed = heapq.heappop(_heap)
+    _neg_s, _order, routed = heapq.heappop(_heap)
     return routed
 
 
@@ -57,7 +60,7 @@ def peek() -> Optional[RoutedTicket]:
     """Return next ticket without removing it. None if empty."""
     if not _heap:
         return None
-    _neg_priority, _order, routed = _heap[0]
+    _neg_s, _order, routed = _heap[0]
     return routed
 
 

@@ -14,6 +14,12 @@ export interface IncomingTicket {
   customer_id?: string | null;
 }
 
+export interface TicketAccepted {
+  ticket_id: string;
+  job_id: string;
+  message: string;
+}
+
 export interface RoutedTicket {
   ticket_id: string;
   subject: string;
@@ -22,6 +28,7 @@ export interface RoutedTicket {
   category: TicketCategory;
   is_urgent: boolean;
   priority_score: number;
+  urgency_score: number;
 }
 
 export interface QueueSizeResponse {
@@ -52,12 +59,13 @@ async function request<T>(
     throw new Error((detail as { detail?: string }).detail ?? res.statusText);
   }
   if (res.status === 204) return undefined as T;
+  if (res.status === 202) return res.json() as Promise<T>;
   return res.json() as Promise<T>;
 }
 
 export const api = {
   submitTicket(payload: IncomingTicket) {
-    return request<RoutedTicket>("/tickets", {
+    return request<TicketAccepted>("/tickets", {
       method: "POST",
       body: JSON.stringify(payload),
     });

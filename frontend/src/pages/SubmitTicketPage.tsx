@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { api, type IncomingTicket, type RoutedTicket } from "@/api/client";
+import { api, type IncomingTicket, type TicketAccepted } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 const emptyForm: IncomingTicket = {
   ticket_id: "",
@@ -15,36 +14,24 @@ const emptyForm: IncomingTicket = {
   customer_id: "",
 };
 
-function ResultCard({ ticket }: { ticket: RoutedTicket }) {
-  const categoryVariant =
-    ticket.category === "Technical"
-      ? "technical"
-      : ticket.category === "Billing"
-        ? "billing"
-        : "legal";
+function AcceptedCard({ accepted }: { accepted: TicketAccepted }) {
   return (
     <Card className="mt-6 border-emerald-200 bg-emerald-50/50">
       <CardHeader>
-        <CardTitle className="text-lg">Ticket submitted</CardTitle>
+        <CardTitle className="text-lg">Accepted for processing</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         <p className="text-sm text-slate-600">
-          <span className="font-medium">ID:</span> {ticket.ticket_id}
+          <span className="font-medium">Ticket ID:</span> {accepted.ticket_id}
         </p>
         <p className="text-sm text-slate-600">
-          <span className="font-medium">Category:</span>{" "}
-          <Badge variant={categoryVariant}>{ticket.category}</Badge>
+          <span className="font-medium">Job ID:</span>{" "}
+          <code className="rounded bg-slate-200 px-1 text-xs">{accepted.job_id}</code>
         </p>
-        <p className="text-sm text-slate-600">
-          <span className="font-medium">Urgent:</span>{" "}
-          {ticket.is_urgent ? (
-            <Badge variant="urgent">Yes</Badge>
-          ) : (
-            <span>No</span>
-          )}
-        </p>
-        <p className="text-sm text-slate-600">
-          <span className="font-medium">Priority score:</span> {ticket.priority_score}
+        <p className="text-sm text-slate-600">{accepted.message}</p>
+        <p className="mt-2 text-xs text-slate-500">
+          The ticket will be classified in the background. Check the Queue page to see it once
+          processed.
         </p>
       </CardContent>
     </Card>
@@ -53,14 +40,14 @@ function ResultCard({ ticket }: { ticket: RoutedTicket }) {
 
 export function SubmitTicketPage() {
   const [form, setForm] = useState<IncomingTicket>(emptyForm);
-  const [lastResult, setLastResult] = useState<RoutedTicket | null>(null);
+  const [lastAccepted, setLastAccepted] = useState<TicketAccepted | null>(null);
   const { toast } = useToast();
 
   const submitMutation = useMutation({
     mutationFn: api.submitTicket,
     onSuccess: (data) => {
-      setLastResult(data);
-      toast("success", `Ticket ${data.ticket_id} submitted and queued.`);
+      setLastAccepted(data);
+      toast("success", `Ticket ${data.ticket_id} accepted for processing.`);
       setForm(emptyForm);
     },
     onError: (err: Error) => {
@@ -138,7 +125,7 @@ export function SubmitTicketPage() {
           {submitMutation.isPending ? "Submitting…" : "Submit ticket"}
         </Button>
       </form>
-      {lastResult && <ResultCard ticket={lastResult} />}
+      {lastAccepted && <AcceptedCard accepted={lastAccepted} />}
     </div>
   );
 }

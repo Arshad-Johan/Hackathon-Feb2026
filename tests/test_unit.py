@@ -51,6 +51,7 @@ class TestQueue:
         t = IncomingTicket(ticket_id="A", subject="s", body="b")
         r = enqueue(t)
         assert r.ticket_id == "A"
+        assert 0 <= r.urgency_score <= 1
         assert size() == 1
         out = dequeue()
         assert out.ticket_id == "A"

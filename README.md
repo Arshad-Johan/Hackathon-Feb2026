@@ -6,12 +6,12 @@ A high-throughput, intelligent routing engine that categorizes support tickets, 
 
 ## Implementation overview
 
-### Backend (Milestone 1 — MVR)
+### Backend
 
-- **Classifier:** Routes tickets into **Billing**, **Technical**, or **Legal**. Regex-based urgency detection (e.g. "broken", "ASAP") sets priority.
-- **Queue:** In-memory priority queue (heapq); higher priority served first.
-- **API:** FastAPI with CORS for the frontend. Endpoints: submit ticket, pop/peek next, queue size, list queue (read-only snapshot), clear queue, health.
-- **Data:** Stored in memory only; no database or file persistence.
+- **Classifier:** Routes tickets into **Billing**, **Technical**, or **Legal**. Urgency from transformer-based sentiment (continuous score S ∈ [0, 1]); regex baseline in tests.
+- **Queue:** Redis-backed processed queue (workers push classified tickets; API pops by urgency). Background worker (ARQ) does classification + sentiment.
+- **API:** FastAPI with CORS. **POST /tickets** returns **202 Accepted** with `job_id`; worker enqueues when done. Endpoints: submit ticket, pop/peek next, queue size, list queue (read-only), clear queue, health.
+- **Data:** Redis for job queue and processed list; no DB/file persistence for ticket content.
 
 ### Frontend
 
@@ -26,9 +26,9 @@ A high-throughput, intelligent routing engine that categorizes support tickets, 
 
 ## Running the project
 
-Use two terminals: one for the backend, one for the frontend.
+Use **three** steps: Redis, then backend API, then (optional) frontend. For full step-by-step instructions see **[RUN.md](RUN.md)**.
 
-### 1. Backend (API)
+### 1. Backend (API + worker)
 
 From the **project root**:
 
@@ -45,10 +45,21 @@ python -m venv .venv
 
 ```bash
 pip install -r requirements.txt
+```
+
+**Start Redis** (required). Then in **Terminal 1**:
+
+```bash
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Leave this terminal open. You should see: `Uvicorn running on http://127.0.0.1:8000`.
+In **Terminal 2** (same venv):
+
+```bash
+python -m app.worker
+```
+
+Leave both running. Tickets are accepted with 202 and processed by the worker into the queue.
 
 **Troubleshooting — "Cargo is not installed or is not on PATH" (pydantic-core):**  
 This can happen with Python 3.13 or when the build subprocess does not see Rust/Cargo.
@@ -72,24 +83,29 @@ Then open **http://localhost:5173** in your browser. The UI talks to the API at 
 
 | What              | Command / URL |
 |-------------------|---------------|
+| Redis             | Start Redis/Memurai (see [RUN.md](RUN.md)) |
 | Backend           | `uvicorn app.main:app --reload --host 127.0.0.1 --port 8000` |
+| Worker            | `python -m app.worker` |
 | API docs          | http://localhost:8000/docs |
 | Frontend          | `cd frontend` → `npm install` → `npm run dev` |
 | Web UI            | http://localhost:5173 |
 
+Set `REDIS_URL` if Redis is not on localhost (e.g. `REDIS_URL=redis://localhost:6379/0`). Optional: set `WEBHOOK_URL` (Slack or Discord webhook) to notify when urgency score S > 0.8.
+
 ---
 
-## API
+### API
 
 | Method   | Endpoint        | Description |
 |----------|-----------------|-------------|
-| `POST`   | `/tickets`      | Submit ticket (JSON). Returns classified + urgency; enqueues. |
-| `GET`    | `/tickets/next` | Pop next highest-priority ticket. |
+| `POST`   | `/tickets`      | Submit ticket (JSON). Returns **202 Accepted** with `ticket_id`, `job_id`; worker enqueues when done. |
+| `GET`    | `/tickets/next` | Pop next highest-urgency ticket from processed queue. |
 | `GET`    | `/tickets/peek` | Peek next without removing. |
-| `GET`    | `/queue/size`   | Current queue length. |
+| `GET`    | `/queue/size`   | Processed queue length. |
 | `GET`    | `/queue`        | List all waiting tickets in priority order (read-only). |
-| `DELETE` | `/queue`        | Clear queue. |
+| `DELETE` | `/queue`        | Clear processed queue. |
 | `GET`    | `/health`       | Health check. |
+| `POST`   | `/urgency-score`| Test transformer only (body: `{"text":"..."}`). |
 
 **Example — submit a ticket:**
 
@@ -97,9 +113,8 @@ Then open **http://localhost:5173** in your browser. The UI talks to the API at 
 curl -X POST http://localhost:8000/tickets \
   -H "Content-Type: application/json" \
   -d '{"ticket_id":"T-001","subject":"Login broken ASAP","body":"Cannot login. Need fix ASAP."}'
+# → 202 with job_id. After the worker runs, GET /tickets/next returns the classified ticket (category, urgency_score, etc.).
 ```
-
-Response includes `category`, `is_urgent`, and `priority_score`; the ticket is stored in the queue.
 
 ---
 
@@ -125,7 +140,10 @@ Or use `python scripts/run_tests_live.py` to start the server, run tests, then s
 
 ## Project layout
 
-- `app/` — FastAPI app: `main.py`, `models.py`, `classifier.py`, `queue_store.py`
+- `app/` — FastAPI app: `main.py`, `models.py`, `classifier.py`, `queue_store.py`, `broker.py`, `config.py`, `sentiment.py`, `worker.py`
 - `frontend/` — React SPA (Vite, TypeScript, Tailwind)
 - `tests/` — Unit and API tests
 - `scripts/` — Helpers (e.g. run tests against live server)
+- `RUN.md` — Detailed run instructions (Redis, API, worker)
+- `MILESTONE1.md` — MVR (in-memory) spec and verification.
+- `MILESTONE2.md` — Intelligent Queue (async broker, transformer urgency, webhook); current app.

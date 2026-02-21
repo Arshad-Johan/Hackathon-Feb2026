@@ -1,6 +1,7 @@
 # Milestone 1: Minimum Viable Router (MVR)
 
-This document describes **Milestone 1 only**: the backend API and how to run and verify it.
+This document describes **Milestone 1 only**: the backend API and how to run and verify it.  
+**The current application implements Milestone 2.** For the Intelligent Queue (async broker, transformer urgency, webhook), see [MILESTONE2.md](MILESTONE2.md).
 
 ---
 
