@@ -35,6 +35,60 @@ export interface QueueSizeResponse {
   size: number;
 }
 
+// --- Milestone 3: Incidents (semantic deduplication) ---
+export interface MasterIncident {
+  incident_id: string;
+  summary: string;
+  root_ticket_id: string;
+  ticket_ids: string[];
+  created_at: number;
+  status: string;
+}
+
+// --- Milestone 3: Agents (skill-based routing) ---
+export interface SkillVector {
+  tech: number;
+  billing: number;
+  legal: number;
+}
+
+export interface Agent {
+  agent_id: string;
+  display_name: string;
+  skill_vector: SkillVector;
+  max_concurrent_tickets: number;
+  current_load: number;
+  status: string;
+}
+
+export interface AssignmentsResponse {
+  assignments: Array<{ ticket_id: string; agent_id: string }>;
+}
+
+export interface AgentTicketsResponse {
+  agent_id: string;
+  ticket_ids: string[];
+}
+
+// --- Urgency test (transformer/circuit breaker) ---
+export interface UrgencyTestResponse {
+  urgency_score: number;
+  is_urgent: boolean;
+}
+
+// --- Metrics ---
+export interface MetricsResponse {
+  circuit_breaker?: { state: string; [k: string]: unknown };
+  master_incidents_count?: number;
+  online_agents_count?: number;
+  error?: string;
+}
+
+export interface HealthResponse {
+  status: string;
+  circuit_breaker?: { state: string; [k: string]: unknown };
+}
+
 let getToken: (() => string | null) | null = null;
 
 export function setAuthTokenGetter(fn: () => string | null) {
@@ -102,6 +156,45 @@ export const api = {
   /** Recent backend activity (ticket accepted, processed, popped, queue cleared). */
   getActivity(limit = 100) {
     return request<{ events: ActivityEvent[] }>(`/activity?limit=${limit}`);
+  },
+  /** Test urgency score for text (transformer/circuit breaker); does not enqueue. */
+  testUrgency(text: string) {
+    return request<UrgencyTestResponse>("/urgency-score", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  },
+  // --- Incidents ---
+  getIncidents(limit = 50, status?: string) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (status) params.set("status", status);
+    return request<MasterIncident[]>(`/incidents?${params}`);
+  },
+  getIncident(incidentId: string) {
+    return request<MasterIncident>(`/incidents/${incidentId}`);
+  },
+  // --- Agents ---
+  listAgents(onlineOnly = false) {
+    return request<Agent[]>(`/agents?online_only=${onlineOnly}`);
+  },
+  getAgent(agentId: string) {
+    return request<Agent>(`/agents/${agentId}`);
+  },
+  registerAgent(agent: Agent) {
+    return request<Agent>("/agents", {
+      method: "POST",
+      body: JSON.stringify(agent),
+    });
+  },
+  getAssignments(limit = 100) {
+    return request<AssignmentsResponse>(`/assignments?limit=${limit}`);
+  },
+  getAgentTickets(agentId: string) {
+    return request<AgentTicketsResponse>(`/agents/${agentId}/tickets`);
+  },
+  // --- Health & metrics ---
+  getMetrics() {
+    return request<MetricsResponse>("/metrics");
   },
 };
 

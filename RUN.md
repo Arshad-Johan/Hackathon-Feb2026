@@ -128,6 +128,50 @@ http://127.0.0.1:8000/docs
 
 ---
 
+## 6. Run and test the frontend
+
+The frontend talks to the API at **http://localhost:8000** by default. Ensure the API and worker are running (steps 2–4) first.
+
+**Install dependencies (once):**
+
+```powershell
+cd frontend
+npm install
+```
+
+**Start the frontend dev server (Terminal 3):**
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Then open **http://localhost:5173** in your browser.
+
+**If your API runs on a different host/port**, create a `.env` file in the `frontend` folder:
+
+```
+VITE_API_URL=http://127.0.0.1:8000
+```
+
+(Use your actual API URL; no trailing slash.) Restart `npm run dev` after changing `.env`.
+
+### How to check that the frontend works correctly
+
+| Check | What to do | Expected |
+|-------|------------|----------|
+| **Backend connected** | Open **Dashboard** (home). Look at "API status" and the green "Connected" card at the bottom. | API status: **ok**; card says "Backend is reachable at ...". If you see "…" or errors, the API is not running or CORS/URL is wrong. |
+| **Submit ticket** | Go to **Submit**. Fill Ticket ID, Subject, Body. Click "Submit ticket". | Green toast "Ticket … accepted"; "Accepted for processing" card appears. |
+| **Queue** | Go to **Queue**. After submitting a ticket, wait a few seconds and refresh or wait for auto-refresh. | Queue size increases; ticket appears in the table with category and urgency. "Pop next" works. |
+| **Activity** | Go to **Activity**. | Event log shows "Accepted", "Processed", "Popped", "Queue cleared" with timestamps. |
+| **Test urgency** | On **Submit** page, scroll to "Test urgency score". Type some text, click "Score". | Score (S = …) and "Urgent" / "Not urgent" badge appear (calls `/urgency-score`). |
+| **Incidents** | Go to **Incidents**. | List of master incidents (or "No incidents found" if none yet). Filter by Open/Resolved works. |
+| **Agents** | Go to **Agents**. | List of agents (or "No agents found"). "Register agent" form works; new agent appears after submit. |
+
+**Quick smoke test:** Dashboard → Submit a ticket → wait ~5 s → Queue shows the ticket → Activity shows events. If all of that works, the frontend is correctly connected to the backend.
+
+---
+
 ## Summary
 
 | Step | What to run | Where |
@@ -136,6 +180,7 @@ http://127.0.0.1:8000/docs
 | 2 | Start Redis (or Memurai / cloud) | — |
 | 3 | `uvicorn app.main:app --reload --host 127.0.0.1 --port 8000` | Terminal 1 |
 | 4 | `python -m app.worker` | Terminal 2 (same folder, same venv) |
-| 5 | Use curl or /docs to test | — |
+| 5 | Use curl or /docs to test API | — |
+| 6 | `cd frontend` then `npm install` and `npm run dev`; open http://localhost:5173 | Terminal 3 |
 
-Both the API (Terminal 1) and the worker (Terminal 2) must be running for tickets to be processed.
+Both the API (Terminal 1) and the worker (Terminal 2) must be running for tickets to be processed. The frontend (Terminal 3) needs the API to be up to show "Connected" and to submit tickets, view queue, etc.

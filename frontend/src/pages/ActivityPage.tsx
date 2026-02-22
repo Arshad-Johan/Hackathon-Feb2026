@@ -19,7 +19,7 @@ function EventRow({ event }: { event: ActivityEvent }) {
   const { label, variant = "secondary" } = EVENT_LABELS[event.type] ?? { label: event.type };
   const data = event.data as Record<string, unknown>;
   return (
-    <div className="flex flex-wrap items-start gap-2 border-b border-slate-100 py-3 last:border-0">
+    <div className="flex flex-wrap items-start gap-2 border-b border-slate-100 py-3 last:border-0 hover:bg-slate-50/50 transition-colors">
       <span className="text-slate-500 text-sm tabular-nums shrink-0">{formatTime(event.ts)}</span>
       <Badge variant={variant}>{label}</Badge>
       <span className="text-sm text-slate-700">
@@ -52,13 +52,15 @@ export function ActivityPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Backend activity</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        Live view of ticket submissions, worker processing, queue pops, and queue clears. Updates every 2s.
-      </p>
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Event log</CardTitle>
+      <header className="page-header">
+        <h1 className="page-title border-b-2 border-indigo-500 w-fit pb-1">Backend activity</h1>
+        <p className="page-desc">
+          Live view of ticket submissions, worker processing, queue pops, and queue clears. Updates every 2s.
+        </p>
+      </header>
+      <Card className="card-hover">
+        <CardHeader className="bg-slate-50/80 border-b border-slate-100">
+          <CardTitle className="text-lg text-slate-800">Event log</CardTitle>
         </CardHeader>
         <CardContent>
           {error && (

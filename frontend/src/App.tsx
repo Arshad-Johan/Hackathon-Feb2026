@@ -5,9 +5,12 @@ import { setAuthTokenGetter } from "@/api/client";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { Layout } from "@/components/Layout";
 import { RequireAuth } from "@/components/RequireAuth";
+import { DashboardPage } from "@/pages/DashboardPage";
 import { SubmitTicketPage } from "@/pages/SubmitTicketPage";
 import { QueuePage } from "@/pages/QueuePage";
 import { ActivityPage } from "@/pages/ActivityPage";
+import { IncidentsPage } from "@/pages/IncidentsPage";
+import { AgentsPage } from "@/pages/AgentsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { useEffect } from "react";
 
@@ -29,7 +32,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
-        <Route index element={<SubmitTicketPage />} />
+        <Route index element={<DashboardPage />} />
+        <Route path="submit" element={<SubmitTicketPage />} />
         <Route
           path="queue"
           element={
@@ -39,6 +43,8 @@ function AppRoutes() {
           }
         />
         <Route path="activity" element={<ActivityPage />} />
+        <Route path="incidents" element={<IncidentsPage />} />
+        <Route path="agents" element={<AgentsPage />} />
         <Route path="login" element={<LoginPage />} />
       </Route>
     </Routes>

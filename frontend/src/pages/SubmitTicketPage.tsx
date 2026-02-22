@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { api, type IncomingTicket, type TicketAccepted } from "@/api/client";
+import { api, type IncomingTicket, type TicketAccepted, type UrgencyTestResponse } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 const emptyForm: IncomingTicket = {
   ticket_id: "",
@@ -16,7 +17,7 @@ const emptyForm: IncomingTicket = {
 
 function AcceptedCard({ accepted }: { accepted: TicketAccepted }) {
   return (
-    <Card className="border-emerald-200 bg-emerald-50/50">
+    <Card className="card-hover border-l-4 border-l-emerald-500 border-emerald-100 bg-emerald-50/50">
       <CardContent className="pt-4">
         <p className="text-sm text-slate-600">
           <span className="font-medium">Ticket ID:</span> {accepted.ticket_id}
@@ -44,9 +45,9 @@ function TicketFormRow({
   canRemove: boolean;
 }) {
   return (
-    <Card className="border-slate-200">
+    <Card className="card-hover border-slate-200">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-base">Ticket #{index + 1}</CardTitle>
+        <CardTitle className="text-base text-slate-800">Ticket #{index + 1}</CardTitle>
         {canRemove && (
           <Button type="button" variant="outline" size="sm" onClick={onRemove}>
             Remove
@@ -75,7 +76,7 @@ function TicketFormRow({
         <div className="space-y-2">
           <Label>Body *</Label>
           <textarea
-            className="flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+            className="flex min-h-[80px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
             value={form.body}
             onChange={(e) => onChange({ ...form, body: e.target.value })}
             placeholder="Describe the issue..."
@@ -185,12 +186,22 @@ export function SubmitTicketPage() {
 
   const isPending = submitSingleMutation.isPending || submitBatchMutation.isPending;
 
+  const [urgencyTestText, setUrgencyTestText] = useState("");
+  const [urgencyResult, setUrgencyResult] = useState<UrgencyTestResponse | null>(null);
+  const urgencyMutation = useMutation({
+    mutationFn: api.testUrgency,
+    onSuccess: (data) => setUrgencyResult(data),
+    onError: (err: Error) => toast("error", err.message),
+  });
+
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Submit tickets</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        Add one or more tickets. Submit a single ticket or submit all at once for batch processing.
-      </p>
+      <header className="page-header">
+        <h1 className="page-title border-b-2 border-indigo-500 w-fit pb-1">Submit tickets</h1>
+        <p className="page-desc">
+          Add one or more tickets. Submit a single ticket or submit all at once for batch processing.
+        </p>
+      </header>
       <form onSubmit={handleSubmit} className="mt-6 space-y-4 max-w-xl">
         <div className="space-y-4">
           {forms.map((form, index) => (
@@ -228,6 +239,40 @@ export function SubmitTicketPage() {
           </div>
         </div>
       )}
+
+      <Card className="mt-8 border-indigo-100 bg-indigo-50/30">
+        <CardHeader>
+          <CardTitle className="text-base text-slate-800">Test urgency score</CardTitle>
+          <p className="text-sm text-slate-600">
+            Backend urgency model (transformer/circuit breaker). Does not enqueue.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Enter text to score urgency..."
+              value={urgencyTestText}
+              onChange={(e) => setUrgencyTestText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && urgencyMutation.mutate(urgencyTestText)}
+            />
+            <Button
+              variant="secondary"
+              onClick={() => urgencyMutation.mutate(urgencyTestText)}
+              disabled={!urgencyTestText.trim() || urgencyMutation.isPending}
+            >
+              {urgencyMutation.isPending ? "…" : "Score"}
+            </Button>
+          </div>
+          {urgencyResult != null && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm shadow-inner border border-indigo-100">
+              <span className="text-slate-700">S = {urgencyResult.urgency_score.toFixed(3)}</span>
+              <Badge variant={urgencyResult.is_urgent ? "urgent" : "secondary"}>
+                {urgencyResult.is_urgent ? "Urgent" : "Not urgent"}
+              </Badge>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

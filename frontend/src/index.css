@@ -1,5 +1,45 @@
 @import "tailwindcss";
 
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Professional palette */
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-light: #e0e7ff;
+  --color-success: #059669;
+  --color-success-light: #d1fae5;
+  --color-warning: #d97706;
+  --color-warning-light: #fef3c7;
+  --color-surface: #f8fafc;
+  --color-border: #e2e8f0;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 antialiased min-h-screen;
+  @apply bg-[var(--color-surface)] text-slate-900 antialiased min-h-screen;
+  background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79, 70, 229, 0.08), transparent);
+}
+
+/* Page section title - reusable */
+.page-title {
+  @apply text-2xl font-bold text-slate-900 tracking-tight;
+}
+.page-desc {
+  @apply mt-1.5 text-sm text-slate-600 max-w-2xl;
+}
+.page-header {
+  @apply border-b border-slate-200/80 pb-6 mb-6;
+}
+.page-header .page-title {
+  @apply pb-1 border-b-2 border-indigo-500 w-fit;
+}
+
+/* Smooth focus for accessibility */
+a:focus-visible,
+button:focus-visible {
+  @apply outline-none ring-2 ring-indigo-500 ring-offset-2;
+}
+
+/* Card hover subtle lift */
+.card-hover {
+  @apply transition-shadow duration-200 hover:shadow-md;
 }

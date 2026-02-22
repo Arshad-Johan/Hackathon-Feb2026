@@ -15,7 +15,7 @@ function TicketRow({ ticket }: { ticket: RoutedTicket }) {
   const urgencyScore = typeof ticket.urgency_score === "number" ? ticket.urgency_score : null;
   const highUrgency = urgencyScore != null && urgencyScore > 0.8;
   return (
-    <tr className="border-b border-slate-100 hover:bg-slate-50/50">
+    <tr className="border-b border-slate-100 hover:bg-indigo-50/30 transition-colors">
       <td className="py-3 px-4 text-sm font-medium text-slate-900">
         {ticket.ticket_id}
       </td>
@@ -87,15 +87,17 @@ export function QueuePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Queue</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        View waiting tickets and pop the next one by priority.
-      </p>
+      <header className="page-header">
+        <h1 className="page-title border-b-2 border-indigo-500 w-fit pb-1">Queue</h1>
+        <p className="page-desc">
+          View waiting tickets and pop the next one by priority.
+        </p>
+      </header>
 
-      <div className="mt-6 flex flex-wrap items-center gap-4">
-        <Card className="min-w-[140px]">
+      <div className="flex flex-wrap items-center gap-4">
+        <Card className="card-hover min-w-[160px] border-l-4 border-l-indigo-500">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Queue size
             </CardTitle>
           </CardHeader>
@@ -123,9 +125,9 @@ export function QueuePage() {
         </div>
       </div>
 
-      <Card className="mt-6 overflow-hidden">
-        <CardHeader>
-          <CardTitle className="text-lg">Waiting tickets</CardTitle>
+      <Card className="mt-6 overflow-hidden card-hover">
+        <CardHeader className="bg-slate-50/80 border-b border-slate-100">
+          <CardTitle className="text-lg text-slate-800">Waiting tickets</CardTitle>
           <p className="text-sm text-slate-600">
             Ordered by priority (highest first).
           </p>
@@ -143,7 +145,7 @@ export function QueuePage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/80">
+                  <tr className="border-b border-slate-200 bg-indigo-50/50">
                     <th className="py-3 px-4 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                       Ticket ID
                     </th>
