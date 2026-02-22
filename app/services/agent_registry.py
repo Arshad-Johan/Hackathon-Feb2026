@@ -187,6 +187,18 @@ def normalize_skill_vector(vec: list[float]) -> list[float]:
     return [x / norm for x in vec]
 
 
+def release_all_assignments() -> int:
+    """Release every ticket from its agent and delete all assignment keys. Use after queue clear so load goes to 0."""
+    r = _redis()
+    keys_to_release = [
+        key.replace(TICKET_ASSIGNEE_PREFIX, "")
+        for key in r.scan_iter(match=f"{TICKET_ASSIGNEE_PREFIX}*")
+    ]
+    for ticket_id in keys_to_release:
+        release_ticket_from_agent(ticket_id)
+    return len(keys_to_release)
+
+
 def list_assignments(limit: int = 100) -> list[dict]:
     """Return recent ticket -> agent assignments (scan TICKET_ASSIGNEE:*)."""
     r = _redis()
@@ -209,3 +221,53 @@ def tickets_for_agent(agent_id: str) -> list[str]:
         if r.get(key) == agent_id:
             out.append(key.replace(TICKET_ASSIGNEE_PREFIX, ""))
     return out
+
+
+def reconcile_agent_loads() -> int:
+    """
+    Set each agent's current_load to the count of tickets currently assigned to them.
+    Fixes drift when queue was cleared without releasing or after restarts.
+    Returns number of agents updated.
+    """
+    r = _redis()
+    updated = 0
+    for key in r.scan_iter(match=f"{AGENT_PREFIX}*"):
+        if key == AGENTS_ONLINE_SET:
+            continue
+        agent_id = key.replace(AGENT_PREFIX, "")
+        agent = get_agent(agent_id)
+        if not agent:
+            continue
+        actual_load = len(tickets_for_agent(agent_id))
+        if agent.current_load != actual_load:
+            old_load = agent.current_load
+            agent.current_load = actual_load
+            r.set(_agent_key(agent_id), agent.model_dump_json())
+            updated += 1
+            logger.info("Reconciled agent %s load: %d -> %d.", agent_id, old_load, actual_load)
+    return updated
+
+
+def force_zero_all_loads() -> int:
+    """
+    Set every agent's current_load to 0. Use after queue clear to guarantee UI shows no load.
+    Also deletes any remaining assignment keys so state is clean.
+    """
+    r = _redis()
+    # Delete all assignment keys first so no orphan remains
+    for key in list(r.scan_iter(match=f"{TICKET_ASSIGNEE_PREFIX}*")):
+        r.delete(key)
+    # Then set every agent's load to 0
+    zeroed = 0
+    for key in r.scan_iter(match=f"{AGENT_PREFIX}*"):
+        if key == AGENTS_ONLINE_SET:
+            continue
+        agent_id = key.replace(AGENT_PREFIX, "")
+        agent = get_agent(agent_id)
+        if not agent:
+            continue
+        if agent.current_load != 0:
+            agent.current_load = 0
+            r.set(_agent_key(agent_id), agent.model_dump_json())
+            zeroed += 1
+    return zeroed

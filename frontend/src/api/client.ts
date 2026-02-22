@@ -173,6 +173,10 @@ export const api = {
   getIncident(incidentId: string) {
     return request<MasterIncident>(`/incidents/${incidentId}`);
   },
+  /** Close (resolve) an open incident. */
+  closeIncident(incidentId: string) {
+    return request<MasterIncident>(`/incidents/${incidentId}/close`, { method: "POST" });
+  },
   // --- Agents ---
   listAgents(onlineOnly = false) {
     return request<Agent[]>(`/agents?online_only=${onlineOnly}`);
@@ -191,6 +195,10 @@ export const api = {
   },
   getAgentTickets(agentId: string) {
     return request<AgentTicketsResponse>(`/agents/${agentId}/tickets`);
+  },
+  /** Set every agent's load to 0 (use when queue is empty but loads still show). */
+  zeroAgentLoads() {
+    return request<{ status: string; agents_zeroed: number }>("/agents/loads/zero", { method: "POST" });
   },
   // --- Health & metrics ---
   getMetrics() {

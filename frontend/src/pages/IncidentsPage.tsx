@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type MasterIncident } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,13 +13,30 @@ function formatTime(ts: number) {
   });
 }
 
-function IncidentCard({ incident }: { incident: MasterIncident }) {
+function IncidentCard({
+  incident,
+  onClose,
+}: {
+  incident: MasterIncident;
+  onClose: (incidentId: string) => void;
+}) {
   const isResolved = incident.status === "resolved";
   return (
     <Card className={`card-hover ${isResolved ? "border-slate-200 opacity-90" : "border-l-4 border-l-amber-500 border-amber-100 bg-amber-50/30"}`}>
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-        <CardTitle className="text-base">{incident.summary}</CardTitle>
-        <Badge variant={isResolved ? "secondary" : "urgent"}>{incident.status}</Badge>
+        <CardTitle className="text-base">
+          <Link to={`/incidents/${incident.incident_id}`} className="hover:underline">
+            {incident.summary}
+          </Link>
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          <Badge variant={isResolved ? "secondary" : "urgent"}>{incident.status}</Badge>
+          {!isResolved && (
+            <Button variant="outline" size="sm" onClick={() => onClose(incident.incident_id)}>
+              Close incident
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="text-slate-600">
@@ -40,11 +58,21 @@ function IncidentCard({ incident }: { incident: MasterIncident }) {
 
 export function IncidentsPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const queryClient = useQueryClient();
   const { data: incidents = [], isLoading, error } = useQuery({
     queryKey: ["incidents", statusFilter],
     queryFn: () => api.getIncidents(50, statusFilter),
     refetchInterval: 10000,
   });
+  const closeMutation = useMutation({
+    mutationFn: (incidentId: string) => api.closeIncident(incidentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+    },
+  });
+  const handleCloseIncident = (incidentId: string) => {
+    closeMutation.mutate(incidentId);
+  };
 
   return (
     <div>
@@ -96,7 +124,11 @@ export function IncidentsPage() {
         {!error && !isLoading && incidents.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2">
             {incidents.map((inc) => (
-              <IncidentCard key={inc.incident_id} incident={inc} />
+              <IncidentCard
+                key={inc.incident_id}
+                incident={inc}
+                onClose={handleCloseIncident}
+              />
             ))}
           </div>
         )}

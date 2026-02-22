@@ -12,12 +12,15 @@ from app.broker import clear_all, list_snapshot, peek_next, pop_next, processed_
 from app.config import REDIS_URL
 from app.models import Agent, IncomingTicket, MasterIncident, RoutedTicket, TicketAccepted
 from app.ml.model_router import score_urgency, get_circuit_state
-from app.services.dedup_service import get_incident, list_incidents
+from app.services.dedup_service import close_incident, get_incident, list_incidents, remove_ticket_from_incident
 from app.services.agent_registry import (
     get_agent,
     list_assignments,
     list_online_agents,
+    force_zero_all_loads,
+    reconcile_agent_loads,
     register_agent,
+    release_all_assignments,
     release_ticket_from_agent,
     seed_mock_agents,
     tickets_for_agent,
@@ -125,6 +128,7 @@ def get_next_ticket() -> RoutedTicket:
     if ticket is None:
         raise HTTPException(status_code=404, detail="No tickets in queue")
     release_ticket_from_agent(ticket.ticket_id)
+    remove_ticket_from_incident(ticket.ticket_id)
     activity_emit("ticket_popped", {"ticket_id": ticket.ticket_id, "urgency_score": ticket.urgency_score})
     return ticket
 
@@ -152,8 +156,12 @@ def list_queue() -> list[RoutedTicket]:
 
 @app.delete("/queue")
 def reset_queue() -> dict:
-    """Clear the processed queue (for testing)."""
+    """Clear the processed queue (for testing). Removes incidents for queued tickets, clears queue, then forces all agent loads to 0."""
+    snapshot = list_snapshot()
+    for routed in snapshot:
+        remove_ticket_from_incident(routed.ticket_id)
     clear_all()
+    force_zero_all_loads()  # Delete all assignment keys and set every agent current_load=0 so UI is consistent
     activity_emit("queue_cleared", {})
     return {"status": "queue cleared"}
 
@@ -202,6 +210,16 @@ def get_incident_by_id(incident_id: str) -> MasterIncident:
     inc = get_incident(incident_id)
     if inc is None:
         raise HTTPException(status_code=404, detail="Incident not found")
+    return inc
+
+
+@app.post("/incidents/{incident_id}/close", response_model=MasterIncident)
+def close_incident_endpoint(incident_id: str) -> MasterIncident:
+    """Close (resolve) an open incident."""
+    if not close_incident(incident_id):
+        raise HTTPException(status_code=404, detail="Incident not found")
+    inc = get_incident(incident_id)
+    assert inc is not None
     return inc
 
 
@@ -255,6 +273,20 @@ def get_agent_tickets(agent_id: str) -> dict:
     if get_agent(agent_id) is None:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"agent_id": agent_id, "ticket_ids": tickets_for_agent(agent_id)}
+
+
+@app.post("/agents/loads/reconcile")
+def reconcile_loads() -> dict:
+    """Set each agent's current_load to the count of tickets currently assigned to them. Use after queue clear or to fix drift."""
+    updated = reconcile_agent_loads()
+    return {"status": "ok", "agents_updated": updated}
+
+
+@app.post("/agents/loads/zero")
+def zero_loads() -> dict:
+    """Set every agent's current_load to 0 and remove all assignment keys. Use when queue is empty but loads still show (fix inconsistent state)."""
+    zeroed = force_zero_all_loads()
+    return {"status": "ok", "agents_zeroed": zeroed}
 
 
 @app.get("/health")

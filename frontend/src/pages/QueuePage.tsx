@@ -75,6 +75,7 @@ export function QueuePage() {
     mutationFn: api.clearQueue,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["queue"] });
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
       toast("success", "Queue cleared.");
     },
     onError: (err: Error) => {

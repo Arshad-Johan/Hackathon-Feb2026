@@ -69,6 +69,15 @@ export function AgentsPage() {
     onError: (err: Error) => toast("error", err.message),
   });
 
+  const zeroMutation = useMutation({
+    mutationFn: api.zeroAgentLoads,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+      toast("success", `All agent loads reset to 0 (${data.agents_zeroed} updated).`);
+    },
+    onError: (err: Error) => toast("error", err.message),
+  });
+
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.agent_id?.trim()) {
@@ -108,6 +117,15 @@ export function AgentsPage() {
           onClick={() => setOnlineOnly(false)}
         >
           All agents
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => zeroMutation.mutate()}
+          disabled={zeroMutation.isPending}
+          title="Set all agent loads to 0 (use when queue is empty but loads still show)"
+        >
+          {zeroMutation.isPending ? "Resetting…" : "Reset all loads"}
         </Button>
       </div>
 
@@ -157,6 +175,68 @@ export function AgentsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))}
                   placeholder="Optional"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Skills (0–1 each, e.g. Tech=0.9 Billing=0.1 Legal=0)</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs text-slate-500">Tech</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={form.skill_vector?.tech ?? 0}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          skill_vector: {
+                            ...(f.skill_vector ?? defaultSkillVector),
+                            tech: parseFloat(e.target.value) || 0,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-500">Billing</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={form.skill_vector?.billing ?? 0}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          skill_vector: {
+                            ...(f.skill_vector ?? defaultSkillVector),
+                            billing: parseFloat(e.target.value) || 0,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-500">Legal</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={form.skill_vector?.legal ?? 0}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          skill_vector: {
+                            ...(f.skill_vector ?? defaultSkillVector),
+                            legal: parseFloat(e.target.value) || 0,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Max concurrent tickets</Label>

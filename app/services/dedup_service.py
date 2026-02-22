@@ -142,25 +142,43 @@ def check_and_record(
     if len(similar) <= DEDUP_MIN_COUNT:
         return False, None, False, False
 
-    # Flash-flood: find existing incident among similar tickets or create new one
-    existing_incident_id = None
-    for tid in similar:
-        inc_id = _get_incident_for_ticket(r, tid)
-        if inc_id:
-            existing_incident_id = inc_id
-            break
-
-    if existing_incident_id:
-        _add_ticket_to_incident(r, existing_incident_id, ticket_id)
-        return True, existing_incident_id, True, False
-
-    # Create new master incident; include all similar tickets (they're in the window)
+    # Flash-flood: always create a new master incident (do not reuse existing)
     summary = routed.subject or f"Incident (root: {ticket_id})"
     incident_id = _create_master_incident(r, root_ticket_id=ticket_id, summary=summary, ticket_ids=similar)
-    # Current ticket was already in similar; link it explicitly if not already
+    # Current ticket was already in similar; ensure it is linked
     r.sadd(f"{INCIDENT_TICKETS_PREFIX}{incident_id}", ticket_id)
     r.set(f"{TICKET_INCIDENT_PREFIX}{ticket_id}", incident_id)
     return True, incident_id, True, True
+
+
+def remove_ticket_from_incident(ticket_id: str) -> None:
+    """
+    When a ticket is popped from the queue, remove it from its master incident.
+    If the incident has no tickets left, mark it resolved.
+    """
+    r = _redis()
+    incident_id = r.get(f"{TICKET_INCIDENT_PREFIX}{ticket_id}")
+    if not incident_id:
+        return
+    r.srem(f"{INCIDENT_TICKETS_PREFIX}{incident_id}", ticket_id)
+    r.delete(f"{TICKET_INCIDENT_PREFIX}{ticket_id}")
+    remaining = r.scard(f"{INCIDENT_TICKETS_PREFIX}{incident_id}")
+    if remaining == 0:
+        r.hset(f"{INCIDENT_PREFIX}{incident_id}", "status", "resolved")
+        logger.info("Incident %s resolved (no tickets left).", incident_id)
+    else:
+        logger.info("Removed ticket %s from incident %s (%d tickets left).", ticket_id, incident_id, remaining)
+
+
+def close_incident(incident_id: str) -> bool:
+    """Mark an incident as resolved (closed). Returns True if updated."""
+    r = _redis()
+    key = f"{INCIDENT_PREFIX}{incident_id}"
+    if not r.exists(key):
+        return False
+    r.hset(key, "status", "resolved")
+    logger.info("Incident %s closed by user.", incident_id)
+    return True
 
 
 def get_incident(incident_id: str) -> Optional[MasterIncident]:

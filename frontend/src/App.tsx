@@ -10,6 +10,7 @@ import { SubmitTicketPage } from "@/pages/SubmitTicketPage";
 import { QueuePage } from "@/pages/QueuePage";
 import { ActivityPage } from "@/pages/ActivityPage";
 import { IncidentsPage } from "@/pages/IncidentsPage";
+import { IncidentDetailPage } from "@/pages/IncidentDetailPage";
 import { AgentsPage } from "@/pages/AgentsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { useEffect } from "react";
@@ -44,6 +45,7 @@ function AppRoutes() {
         />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="incidents" element={<IncidentsPage />} />
+        <Route path="incidents/:incidentId" element={<IncidentDetailPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="login" element={<LoginPage />} />
       </Route>

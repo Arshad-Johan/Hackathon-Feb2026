@@ -4,6 +4,7 @@ Milestone 3: semantic deduplication (embeddings + master incident), circuit brea
 """
 
 import logging
+from dataclasses import replace
 
 from arq import run_worker
 from arq.connections import RedisSettings
@@ -11,7 +12,7 @@ from arq.connections import RedisSettings
 from app.activity import publish_event
 from app.broker import add_processed
 from app.classifier import _match_category
-from app.config import REDIS_URL
+from app.config import REDIS_CONN_TIMEOUT, REDIS_URL
 from app.models import IncomingTicket, RoutedTicket
 from app.services.dedup_service import check_and_record
 from app.services.agent_registry import assign_ticket_to_agent, route_ticket
@@ -102,7 +103,10 @@ async def process_ticket(ctx: dict, payload: dict) -> None:
 
 class WorkerSettings:
     functions = [process_ticket]
-    redis_settings = RedisSettings.from_dsn(REDIS_URL)
+    redis_settings = replace(
+        RedisSettings.from_dsn(REDIS_URL),
+        conn_timeout=REDIS_CONN_TIMEOUT,
+    )
 
 
 if __name__ == "__main__":
