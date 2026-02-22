@@ -7,13 +7,8 @@ import json
 import logging
 from typing import Optional
 
-from app.config import REDIS_URL, ROUTING_LOAD_PENALTY_FACTOR
+from app.config import REDIS_URL
 from app.models import Agent, RoutedTicket, SkillVector
-from app.services.routing_utils import (
-    cosine_similarity_vec,
-    skill_vector_to_list,
-    ticket_skill_vector,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -170,26 +165,17 @@ def get_assignee(ticket_id: str) -> Optional[str]:
 
 def route_ticket(routed: RoutedTicket) -> Optional[str]:
     """
-    Constraint optimization: choose best available agent by skill match and capacity.
-    Score = cosine_similarity(agent.skill_vector, ticket_skill_vector) - load_penalty.
+    Solve a constraint optimization (ILP) to route the ticket to the best available agent:
+    maximize skill match minus load penalty, subject to assign-to-exactly-one-agent and capacity.
     Returns agent_id or None if no capacity.
     """
+    from app.services.routing_optimizer import solve_routing_ilp
+
     agents = list_online_agents()
     if not agents:
         logger.warning("No online agents with capacity for ticket %s.", routed.ticket_id)
         return None
-    ticket_vec = ticket_skill_vector(routed.category, routed.urgency_score)
-    best_agent_id = None
-    best_score = -2.0
-    for agent in agents:
-        agent_vec = normalize_skill_vector(skill_vector_to_list(agent.skill_vector))
-        sim = cosine_similarity_vec(ticket_vec, agent_vec)
-        load_penalty = ROUTING_LOAD_PENALTY_FACTOR * (agent.current_load / max(1, agent.max_concurrent_tickets))
-        score = sim - load_penalty
-        if score > best_score:
-            best_score = score
-            best_agent_id = agent.agent_id
-    return best_agent_id
+    return solve_routing_ilp(routed, agents)
 
 
 def normalize_skill_vector(vec: list[float]) -> list[float]:

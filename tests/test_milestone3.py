@@ -21,6 +21,7 @@ from app.services.agent_registry import (
     get_assignee,
 )
 from app.services.dedup_service import get_incident, list_incidents
+from app.services.routing_optimizer import solve_routing_ilp, _compute_scores
 import numpy as np
 
 
@@ -82,6 +83,185 @@ class TestCircuitBreakerBaseline:
         # Use baseline only (no Redis/transformer) for predictable unit test
         s = _baseline_urgency("Login broken")
         assert 0.0 <= s <= 1.0
+
+
+class TestRoutingOptimizerILP:
+    """Constraint optimization (ILP): solve_routing_ilp returns best agent, no Redis required."""
+
+    def test_empty_agents_returns_none(self):
+        routed = RoutedTicket(
+            ticket_id="T1",
+            subject="Bug",
+            body="Broken",
+            category=TicketCategory.TECHNICAL,
+            is_urgent=True,
+            priority_score=5,
+            urgency_score=0.6,
+        )
+        assert solve_routing_ilp(routed, []) is None
+
+    def test_single_agent_returns_that_agent(self):
+        agent = Agent(
+            agent_id="only-agent",
+            display_name="Only",
+            skill_vector=SkillVector(tech=0.9, billing=0.05, legal=0.05),
+            max_concurrent_tickets=10,
+            current_load=0,
+            status="online",
+        )
+        routed = RoutedTicket(
+            ticket_id="T1",
+            subject="API broken",
+            body="500 error",
+            category=TicketCategory.TECHNICAL,
+            is_urgent=False,
+            priority_score=3,
+            urgency_score=0.4,
+        )
+        result = solve_routing_ilp(routed, [agent])
+        assert result == "only-agent"
+
+    def test_ilp_picks_highest_score_agent_technical(self):
+        """Technical ticket should be assigned to tech-specialist (highest skill match)."""
+        agents = [
+            Agent(
+                agent_id="tech",
+                display_name="Tech",
+                skill_vector=SkillVector(tech=0.95, billing=0.025, legal=0.025),
+                max_concurrent_tickets=10,
+                current_load=0,
+                status="online",
+            ),
+            Agent(
+                agent_id="billing",
+                display_name="Billing",
+                skill_vector=SkillVector(tech=0.05, billing=0.9, legal=0.05),
+                max_concurrent_tickets=10,
+                current_load=0,
+                status="online",
+            ),
+        ]
+        routed = RoutedTicket(
+            ticket_id="T-tech",
+            subject="Login broken",
+            body="Cannot login",
+            category=TicketCategory.TECHNICAL,
+            is_urgent=True,
+            priority_score=7,
+            urgency_score=0.7,
+        )
+        scores = _compute_scores(routed, agents)
+        assert scores[0] > scores[1]
+        result = solve_routing_ilp(routed, agents)
+        assert result == "tech"
+
+    def test_ilp_picks_highest_score_agent_billing(self):
+        """Billing ticket should be assigned to billing-specialist."""
+        agents = [
+            Agent(
+                agent_id="tech",
+                display_name="Tech",
+                skill_vector=SkillVector(tech=0.9, billing=0.05, legal=0.05),
+                max_concurrent_tickets=10,
+                current_load=0,
+                status="online",
+            ),
+            Agent(
+                agent_id="billing",
+                display_name="Billing",
+                skill_vector=SkillVector(tech=0.05, billing=0.95, legal=0.0),
+                max_concurrent_tickets=10,
+                current_load=0,
+                status="online",
+            ),
+        ]
+        routed = RoutedTicket(
+            ticket_id="T-bill",
+            subject="Wrong charge",
+            body="Double charged",
+            category=TicketCategory.BILLING,
+            is_urgent=False,
+            priority_score=2,
+            urgency_score=0.2,
+        )
+        result = solve_routing_ilp(routed, agents)
+        assert result == "billing"
+
+    def test_ilp_result_matches_argmax(self):
+        """ILP solution must equal argmax(scores) for consistency."""
+        agents = [
+            Agent(
+                agent_id="a",
+                display_name="A",
+                skill_vector=SkillVector(tech=0.8, billing=0.1, legal=0.1),
+                max_concurrent_tickets=10,
+                current_load=0,
+                status="online",
+            ),
+            Agent(
+                agent_id="b",
+                display_name="B",
+                skill_vector=SkillVector(tech=0.1, billing=0.8, legal=0.1),
+                max_concurrent_tickets=10,
+                current_load=0,
+                status="online",
+            ),
+            Agent(
+                agent_id="c",
+                display_name="C",
+                skill_vector=SkillVector(tech=0.33, billing=0.33, legal=0.34),
+                max_concurrent_tickets=10,
+                current_load=0,
+                status="online",
+            ),
+        ]
+        routed = RoutedTicket(
+            ticket_id="T1",
+            subject="Legal question",
+            body="GDPR request",
+            category=TicketCategory.LEGAL,
+            is_urgent=True,
+            priority_score=8,
+            urgency_score=0.8,
+        )
+        scores = _compute_scores(routed, agents)
+        expected_agent_id = agents[int(np.argmax(scores))].agent_id
+        result = solve_routing_ilp(routed, agents)
+        assert result == expected_agent_id
+
+    def test_load_penalty_makes_less_loaded_agent_preferred(self):
+        """When skill match is equal, lower load should be preferred (load penalty)."""
+        agents = [
+            Agent(
+                agent_id="heavy",
+                display_name="Heavy",
+                skill_vector=SkillVector(tech=0.9, billing=0.05, legal=0.05),
+                max_concurrent_tickets=10,
+                current_load=9,
+                status="online",
+            ),
+            Agent(
+                agent_id="light",
+                display_name="Light",
+                skill_vector=SkillVector(tech=0.9, billing=0.05, legal=0.05),
+                max_concurrent_tickets=10,
+                current_load=0,
+                status="online",
+            ),
+        ]
+        routed = RoutedTicket(
+            ticket_id="T1",
+            subject="Bug",
+            body="Error",
+            category=TicketCategory.TECHNICAL,
+            is_urgent=False,
+            priority_score=3,
+            urgency_score=0.3,
+        )
+        scores = _compute_scores(routed, agents)
+        assert scores[1] > scores[0]
+        result = solve_routing_ilp(routed, agents)
+        assert result == "light"
 
 
 class TestRouting:
