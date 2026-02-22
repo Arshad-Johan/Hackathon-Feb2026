@@ -187,12 +187,11 @@ export function SubmitTicketPage() {
   const isPending = submitSingleMutation.isPending || submitBatchMutation.isPending;
 
   const [urgencyTestText, setUrgencyTestText] = useState("");
-  const [urgencyResult, setUrgencyResult] = useState<UrgencyTestResponse | null>(null);
   const urgencyMutation = useMutation({
     mutationFn: api.testUrgency,
-    onSuccess: (data) => setUrgencyResult(data),
     onError: (err: Error) => toast("error", err.message),
   });
+  const urgencyResult = urgencyMutation.data;
 
   return (
     <div>
@@ -260,15 +259,26 @@ export function SubmitTicketPage() {
               onClick={() => urgencyMutation.mutate(urgencyTestText)}
               disabled={!urgencyTestText.trim() || urgencyMutation.isPending}
             >
-              {urgencyMutation.isPending ? "…" : "Score"}
+              {urgencyMutation.isPending ? "Scoring…" : "Score"}
             </Button>
           </div>
-          {urgencyResult != null && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm shadow-inner border border-indigo-100">
-              <span className="text-slate-700">S = {urgencyResult.urgency_score.toFixed(3)}</span>
-              <Badge variant={urgencyResult.is_urgent ? "urgent" : "secondary"}>
-                {urgencyResult.is_urgent ? "Urgent" : "Not urgent"}
-              </Badge>
+          {/* Always show result area when we have data or are loading */}
+          {urgencyMutation.isPending && (
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 px-4 py-3 text-sm text-indigo-700">
+              Scoring urgency…
+            </div>
+          )}
+          {urgencyResult != null && !urgencyMutation.isPending && (
+            <div className="rounded-lg border-2 border-indigo-200 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Result</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-lg font-bold text-slate-900">
+                  S = {Number(urgencyResult.urgency_score).toFixed(3)}
+                </span>
+                <Badge variant={urgencyResult.is_urgent ? "urgent" : "secondary"}>
+                  {urgencyResult.is_urgent ? "Urgent" : "Not urgent"}
+                </Badge>
+              </div>
             </div>
           )}
         </CardContent>
