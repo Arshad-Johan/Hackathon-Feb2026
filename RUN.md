@@ -84,6 +84,17 @@ python -m app.worker
 
 (Use your real Redis URL if you use a cloud Redis.)
 
+**Optional (Milestone 3):** Deduplication and circuit breaker thresholds:
+
+```powershell
+$env:DEDUP_SIM_THRESHOLD = "0.9"
+$env:DEDUP_MIN_COUNT = "10"
+$env:DEDUP_WINDOW_SECONDS = "300"
+$env:TRANSFORMER_LATENCY_MS = "500"
+$env:CIRCUIT_COOLDOWN_SECONDS = "60"
+$env:ROUTING_LOAD_PENALTY_FACTOR = "0.1"
+```
+
 ---
 
 ## 5. Test the API
@@ -94,7 +105,7 @@ python -m app.worker
 curl http://127.0.0.1:8000/health
 ```
 
-Expected: `{"status":"ok"}`
+Expected: `{"status":"ok", ...}` (Milestone 3 may include `circuit_breaker` in the response).
 
 **Submit a ticket (returns 202 immediately):**
 

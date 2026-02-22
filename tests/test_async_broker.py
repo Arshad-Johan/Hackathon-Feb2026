@@ -27,7 +27,10 @@ def reset_queue():
 def test_health():
     r = get(_url("/health"))
     assert r.status_code == 200
-    assert r.json() == {"status": "ok"}
+    data = r.json()
+    assert data.get("status") == "ok"
+    # Milestone 3 may add circuit_breaker
+    assert "status" in data
 
 
 def test_post_returns_202_accepted():

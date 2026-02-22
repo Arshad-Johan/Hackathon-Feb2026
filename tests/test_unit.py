@@ -3,6 +3,8 @@ Unit tests for Milestone 1 (no server required).
 Run: pytest tests/test_unit.py -v
 """
 
+from unittest.mock import patch
+
 import pytest
 
 from app.classifier import classify
@@ -58,8 +60,11 @@ class TestQueue:
         assert size() == 0
 
     def test_priority_urgent_first(self):
-        enqueue(IncomingTicket(ticket_id="low", subject="q", body="question"))
-        enqueue(IncomingTicket(ticket_id="high", subject="ASAP", body="urgent ASAP"))
+        # Patch urgency so "low" gets 0.2 and "high" gets 0.9; queue must pop highest first.
+        # (Transformer output can vary; this keeps the test deterministic.)
+        with patch("app.queue_store.compute_urgency_score", side_effect=[0.2, 0.9]):
+            enqueue(IncomingTicket(ticket_id="low", subject="q", body="question"))
+            enqueue(IncomingTicket(ticket_id="high", subject="ASAP", body="urgent ASAP"))
         first = dequeue()
         assert first.ticket_id == "high" and first.is_urgent
         second = dequeue()

@@ -6,6 +6,42 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# --- Milestone 3: Master Incident (semantic deduplication) ---
+
+
+class MasterIncident(BaseModel):
+    """A single master incident grouping similar tickets (flash-flood suppression)."""
+
+    incident_id: str = Field(..., description="Unique incident identifier")
+    summary: str = Field(..., description="Short summary (e.g. from root ticket subject)")
+    root_ticket_id: str = Field(..., description="First ticket that triggered the incident")
+    ticket_ids: list[str] = Field(default_factory=list, description="All ticket IDs in this incident")
+    created_at: float = Field(..., description="Unix timestamp when incident was created")
+    status: str = Field(default="open", description="open | resolved")
+
+
+# --- Milestone 3: Agent registry (skill-based routing) ---
+
+
+class SkillVector(BaseModel):
+    """Agent skill vector: tech, billing, legal (normalized weights)."""
+
+    tech: float = Field(default=0.0, ge=0.0, le=1.0)
+    billing: float = Field(default=0.0, ge=0.0, le=1.0)
+    legal: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class Agent(BaseModel):
+    """An agent with skill vector and capacity."""
+
+    agent_id: str = Field(..., description="Unique agent identifier")
+    display_name: str = Field(default="", description="Display name")
+    skill_vector: SkillVector = Field(default_factory=lambda: SkillVector(tech=0.34, billing=0.33, legal=0.33))
+    max_concurrent_tickets: int = Field(default=10, ge=1)
+    current_load: int = Field(default=0, ge=0)
+    status: str = Field(default="online", description="online | offline")
+
+
 class TicketCategory(str, Enum):
     """Supported ticket categories."""
 

@@ -10,8 +10,18 @@ from pydantic import BaseModel, Field
 from app.activity import emit as activity_emit, get_recent as activity_get_recent, start_redis_subscriber
 from app.broker import clear_all, list_snapshot, peek_next, pop_next, processed_size
 from app.config import REDIS_URL
-from app.models import IncomingTicket, RoutedTicket, TicketAccepted
-from app.sentiment import compute_urgency_score
+from app.models import Agent, IncomingTicket, MasterIncident, RoutedTicket, TicketAccepted
+from app.ml.model_router import score_urgency, get_circuit_state
+from app.services.dedup_service import get_incident, list_incidents
+from app.services.agent_registry import (
+    get_agent,
+    list_assignments,
+    list_online_agents,
+    register_agent,
+    release_ticket_from_agent,
+    seed_mock_agents,
+    tickets_for_agent,
+)
 
 _arq_pool = None
 
@@ -29,6 +39,11 @@ async def lifespan(app: FastAPI):
         logging.warning("Redis/ARQ pool unavailable: %s. POST /tickets will return 503.", e)
     start_redis_subscriber()
     try:
+        try:
+            seed_mock_agents()
+        except Exception as e:
+            import logging
+            logging.warning("Could not seed mock agents (Redis down?): %s", e)
         yield
     finally:
         if _arq_pool is not None:
@@ -109,6 +124,7 @@ def get_next_ticket() -> RoutedTicket:
     ticket = pop_next()
     if ticket is None:
         raise HTTPException(status_code=404, detail="No tickets in queue")
+    release_ticket_from_agent(ticket.ticket_id)
     activity_emit("ticket_popped", {"ticket_id": ticket.ticket_id, "urgency_score": ticket.urgency_score})
     return ticket
 
@@ -142,12 +158,6 @@ def reset_queue() -> dict:
     return {"status": "queue cleared"}
 
 
-@app.get("/health")
-def health() -> dict:
-    """Health check."""
-    return {"status": "ok"}
-
-
 @app.get("/activity")
 def get_activity(limit: int = 100) -> dict:
     """Return recent backend activity events (ticket accepted, processed, popped, queue cleared)."""
@@ -170,6 +180,102 @@ class UrgencyTestResponse(BaseModel):
 
 @app.post("/urgency-score", response_model=UrgencyTestResponse)
 def test_urgency_score(payload: UrgencyTestRequest) -> UrgencyTestResponse:
-    """Test the transformer urgency model only; does not enqueue."""
-    S = compute_urgency_score(payload.text)
+    """Test the urgency model (transformer or baseline via circuit breaker); does not enqueue."""
+    S = score_urgency(payload.text)
     return UrgencyTestResponse(urgency_score=S, is_urgent=(S >= 0.5))
+
+
+# --- Milestone 3: Master Incidents (semantic deduplication) ---
+
+
+@app.get("/incidents", response_model=list[MasterIncident])
+def get_incidents_list(limit: int = 50, status: str | None = None) -> list[MasterIncident]:
+    """List master incidents (flash-flood groupings). Optionally filter by status (open/resolved)."""
+    if limit < 1 or limit > 100:
+        limit = 50
+    return list_incidents(limit=limit, status=status)
+
+
+@app.get("/incidents/{incident_id}", response_model=MasterIncident)
+def get_incident_by_id(incident_id: str) -> MasterIncident:
+    """Get a single master incident by id."""
+    inc = get_incident(incident_id)
+    if inc is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return inc
+
+
+# --- Milestone 3: Skill-based routing (agents & assignments) ---
+
+
+@app.post("/agents", response_model=Agent)
+def register_agent_endpoint(agent: Agent) -> Agent:
+    """Register or update an agent (skill vector, capacity)."""
+    register_agent(agent)
+    return get_agent(agent.agent_id) or agent
+
+
+@app.get("/agents", response_model=list[Agent])
+def list_agents_endpoint(online_only: bool = False) -> list[Agent]:
+    """List agents. If online_only=True, only agents in AGENTS_ONLINE with capacity."""
+    if online_only:
+        return list_online_agents()
+    import redis
+    from app.config import REDIS_URL
+    r = redis.from_url(REDIS_URL, decode_responses=True)
+    agents = []
+    for key in r.scan_iter(match="agent:*"):
+        raw = r.get(key)
+        if raw:
+            try:
+                agents.append(Agent.model_validate_json(raw))
+            except Exception:
+                pass
+    return agents
+
+
+@app.get("/agents/{agent_id}", response_model=Agent)
+def get_agent_endpoint(agent_id: str) -> Agent:
+    """Get agent by id."""
+    a = get_agent(agent_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return a
+
+
+@app.get("/assignments")
+def get_assignments(limit: int = 100) -> dict:
+    """List ticket -> agent assignments."""
+    return {"assignments": list_assignments(limit=limit)}
+
+
+@app.get("/agents/{agent_id}/tickets")
+def get_agent_tickets(agent_id: str) -> dict:
+    """List ticket_ids assigned to this agent."""
+    if get_agent(agent_id) is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"agent_id": agent_id, "ticket_ids": tickets_for_agent(agent_id)}
+
+
+@app.get("/health")
+def health() -> dict:
+    """Health check (includes circuit breaker state for Milestone 3)."""
+    out = {"status": "ok"}
+    try:
+        out["circuit_breaker"] = get_circuit_state()
+    except Exception:
+        pass
+    return out
+
+
+@app.get("/metrics")
+def metrics() -> dict:
+    """Milestone 3 metrics: incidents, circuit breaker, agents."""
+    out = {}
+    try:
+        out["circuit_breaker"] = get_circuit_state()
+        out["master_incidents_count"] = len(list_incidents(limit=1000))
+        out["online_agents_count"] = len(list_online_agents())
+    except Exception as e:
+        out["error"] = str(e)
+    return out

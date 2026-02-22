@@ -54,3 +54,33 @@ async def trigger_high_urgency_webhook(routed: RoutedTicket) -> None:
         await asyncio.to_thread(_do_post, WEBHOOK_URL, payload)
     except Exception:
         pass  # mock: do not fail the job
+
+
+def _build_master_incident_payload(incident: "MasterIncident") -> dict[str, Any]:
+    """Build webhook payload for a master incident (flash-flood)."""
+    from app.models import MasterIncident
+    assert isinstance(incident, MasterIncident)
+    return {
+        "text": f"Master Incident (flash-flood): {incident.incident_id} – {incident.summary}",
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Master Incident:* `{incident.incident_id}`\n*Summary:* {incident.summary}\n*Root ticket:* {incident.root_ticket_id}\n*Tickets:* {len(incident.ticket_ids)}",
+                },
+            },
+        ],
+    }
+
+
+async def trigger_master_incident_webhook(incident: "MasterIncident") -> None:
+    """If WEBHOOK_URL is set, POST once for the master incident (suppresses individual alerts)."""
+    from app.models import MasterIncident
+    if not WEBHOOK_URL:
+        return
+    payload = _build_master_incident_payload(incident)
+    try:
+        await asyncio.to_thread(_do_post, WEBHOOK_URL, payload)
+    except Exception:
+        pass

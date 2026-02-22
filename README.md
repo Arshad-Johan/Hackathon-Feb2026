@@ -93,7 +93,7 @@ Then open **http://localhost:5173** in your browser. The UI talks to the API at 
 | Web UI            | http://localhost:5173 |
 | Activity (UI)     | http://localhost:5173/activity |
 
-Set `REDIS_URL` if Redis is not on localhost (e.g. `REDIS_URL=redis://localhost:6379/0`). Optional: set `WEBHOOK_URL` (Slack or Discord webhook) to notify when urgency score S > 0.8.
+Set `REDIS_URL` if Redis is not on localhost (e.g. `REDIS_URL=redis://localhost:6379/0`). Optional: set `WEBHOOK_URL` (Slack or Discord webhook) to notify when urgency score S > 0.8. **Milestone 3** adds optional env vars: `DEDUP_SIM_THRESHOLD`, `DEDUP_MIN_COUNT`, `DEDUP_WINDOW_SECONDS`, `TRANSFORMER_LATENCY_MS`, `CIRCUIT_COOLDOWN_SECONDS`, `ROUTING_LOAD_PENALTY_FACTOR` — see [MILESTONE3.md](MILESTONE3.md).
 
 ---
 
@@ -109,8 +109,14 @@ Set `REDIS_URL` if Redis is not on localhost (e.g. `REDIS_URL=redis://localhost:
 | `GET`    | `/queue`        | List all waiting tickets in priority order (read-only). |
 | `DELETE` | `/queue`        | Clear processed queue. |
 | `GET`    | `/activity`     | Recent backend activity (`?limit=100`). Events: ticket_accepted, ticket_processed, ticket_popped, queue_cleared. |
-| `GET`    | `/health`       | Health check. |
-| `POST`   | `/urgency-score`| Test transformer only (body: `{"text":"..."}`). |
+| `GET`    | `/health`       | Health check (includes circuit_breaker in M3). |
+| `POST`   | `/urgency-score`| Test urgency model (transformer or baseline via circuit breaker). |
+| `GET`    | `/incidents`    | List master incidents (M3). |
+| `GET`    | `/incidents/{id}` | Get one master incident (M3). |
+| `GET`    | `/metrics`      | Circuit breaker, incident count, online agents (M3). |
+| `POST`   | `/agents`       | Register/update agent (M3). |
+| `GET`    | `/agents`       | List agents (M3). |
+| `GET`    | `/assignments`  | Ticket → agent assignments (M3). |
 
 **Example — submit a ticket:**
 
@@ -151,4 +157,5 @@ Or use `python scripts/run_tests_live.py` to start the server, run tests, then s
 - `scripts/` — Helpers (e.g. run tests against live server)
 - `RUN.md` — Detailed run instructions (Redis, API, worker)
 - `MILESTONE1.md` — MVR (in-memory) spec and verification.
-- `MILESTONE2.md` — Intelligent Queue (async broker, transformer urgency, webhook); current app.
+- `MILESTONE2.md` — Intelligent Queue (async broker, transformer urgency, webhook).
+- `MILESTONE3.md` — Autonomous Orchestrator (semantic dedup, circuit breaker, skill-based routing).

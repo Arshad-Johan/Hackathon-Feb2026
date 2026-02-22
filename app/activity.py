@@ -1,6 +1,9 @@
 """
 In-memory activity log for backend events (ticket accepted, processed, popped, queue cleared).
 Worker publishes "ticket_processed" via Redis pub/sub; API subscribes in a background thread.
+
+Note: Events are not persisted to Redis. On API restart the log is empty; only events
+after the restart are shown. History is process-local and lost when the API process exits.
 """
 
 import json
