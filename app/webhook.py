@@ -10,7 +10,7 @@ import urllib.request
 from typing import Any
 
 from app.config import WEBHOOK_URL
-from app.models import RoutedTicket
+from app.models import MasterIncident, RoutedTicket
 
 
 def _build_slack_payload(routed: RoutedTicket) -> dict[str, Any]:
@@ -56,9 +56,8 @@ async def trigger_high_urgency_webhook(routed: RoutedTicket) -> None:
         pass  # mock: do not fail the job
 
 
-def _build_master_incident_payload(incident: "MasterIncident") -> dict[str, Any]:
+def _build_master_incident_payload(incident: MasterIncident) -> dict[str, Any]:
     """Build webhook payload for a master incident (flash-flood)."""
-    from app.models import MasterIncident
     assert isinstance(incident, MasterIncident)
     return {
         "text": f"Master Incident (flash-flood): {incident.incident_id} – {incident.summary}",
@@ -74,9 +73,8 @@ def _build_master_incident_payload(incident: "MasterIncident") -> dict[str, Any]
     }
 
 
-async def trigger_master_incident_webhook(incident: "MasterIncident") -> None:
+async def trigger_master_incident_webhook(incident: MasterIncident) -> None:
     """If WEBHOOK_URL is set, POST once for the master incident (suppresses individual alerts)."""
-    from app.models import MasterIncident
     if not WEBHOOK_URL:
         return
     payload = _build_master_incident_payload(incident)

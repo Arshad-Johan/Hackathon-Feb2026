@@ -128,38 +128,6 @@ VITE_API_URL=http://127.0.0.1:8000
 
 ---
 
-## Live Deployment
-
-**Live deployment link:** [Add your working deployment URL here]
-
-*(Deploy the backend (e.g. Railway, Render) and frontend (e.g. Vercel, Netlify), then replace this line with the live frontend URL and ensure the API URL is set in the frontend environment.)*
-
----
-
-## Screenshots of Working Application
-
-### 1. Dashboard / Home
-
-![Dashboard](screenshots/dashboard.png)
-
-*Dashboard with API status and backend connection.*
-
-### 2. Submit Ticket
-
-![Submit Ticket](screenshots/submit-ticket.png)
-
-*Submit single or batch tickets; form shows Ticket ID, Subject, Body, and optional Customer ID.*
-
-### 3. Queue & Activity
-
-![Queue and Activity](screenshots/queue-activity.png)
-
-*Queue view with priority-ordered tickets and pop/clear actions; Activity page with live event log.*
-
-**Note:** Add your own screenshots in the `screenshots/` folder as `dashboard.png`, `submit-ticket.png`, and `queue-activity.png` (or update the paths above). Minimum 3 screenshots required.
-
----
-
 ## Features Implemented vs Planned
 
 ### Implemented
@@ -188,7 +156,6 @@ VITE_API_URL=http://127.0.0.1:8000
 |--------|--------|
 | **Login & authentication** | Not implemented; RBAC structure only |
 | **Role-based access control** | Prepared in frontend; no roles or permissions yet |
-| **Optional webhook** | `WEBHOOK_URL` (Slack/Discord) for high-urgency and master incidents is supported in backend; needs configuration for live use |
 
 ---
 
