@@ -78,7 +78,10 @@ async def submit_ticket(payload: IncomingTicket) -> TicketAccepted:
     """
     pool = _arq_pool
     if pool is None:
-        raise HTTPException(status_code=503, detail="Worker pool not ready")
+        raise HTTPException(
+            status_code=503,
+            detail="Worker pool not ready. Start Redis (e.g. redis-server or Memurai), then restart the API (uvicorn).",
+        )
     job = await pool.enqueue_job("process_ticket", payload.model_dump())
     job_id = job.job_id if job else str(uuid4())
     activity_emit("ticket_accepted", {"ticket_id": payload.ticket_id, "job_id": job_id})

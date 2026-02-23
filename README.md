@@ -1,36 +1,50 @@
-# Ticket Routing Engine
+# Smart-Support Ticket Routing Engine
 
 A high-throughput, intelligent routing engine that categorizes support tickets, detects urgency, and stores them in a priority queue. It includes a REST API (FastAPI) and an enterprise-ready web frontend.
 
 ---
 
-## Implementation overview
+## Team
 
-### Backend
+**Team name:** InferX
 
-- **Classifier:** Routes tickets into **Billing**, **Technical**, or **Legal**. Urgency from transformer-based sentiment (continuous score S ∈ [0, 1]); regex baseline in tests.
-- **Queue:** Redis-backed processed queue (workers push classified tickets; API pops by urgency). Background worker (ARQ) does classification + sentiment.
-- **API:** FastAPI with CORS. **POST /tickets** returns **202 Accepted** with `job_id`; worker enqueues when done. **POST /tickets/batch** accepts multiple tickets and returns 202 with one `job_id` per ticket. Endpoints: submit (single/batch), pop/peek next, queue size, list queue (read-only), clear queue, **GET /activity** (recent backend events), health.
-- **Activity:** In-memory activity log plus Redis pub/sub; worker publishes **ticket_processed** so the API can expose a unified event stream (accepted, processed, popped, queue cleared).
-- **Data:** Redis for job queue and processed list; no DB/file persistence for ticket content.
-
-### Frontend
-
-- **Stack:** React 18, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query. UI built with shadcn-style components (Button, Input, Card, Badge, etc.).
-- **Pages:**
-  - **Submit ticket** — Single or multiple tickets (add/remove rows); submit one or batch. Form: Ticket ID, Subject, Body, optional Customer ID; on success shows accepted ticket(s) with `job_id`.
-  - **Queue** — Queue size, full list of waiting tickets in priority order, **Pop next** and **Clear queue** actions; auto-refresh.
-  - **Activity** — Live backend event log (ticket accepted, processed by worker, popped, queue cleared); polls every 2s.
-- **RBAC-ready:** Auth context and `RequireAuth` wrapper are in place for future admin/user roles and role-based access; no login yet.
-- **API client:** Typed client with configurable base URL and optional auth token getter for when auth is added.
+| Name              | Roll Number |
+|-------------------|-------------|
+| Arshad Johan P    | 22PT04      |
+| Jeeva Vilasini    | 22PT13      |
+| Roobika T         | 22PT26      |
+| SriDharsan V      | 22PT33      |
 
 ---
 
-## Running the project
+## Problem Statement
 
-Use **three** steps: Redis, then backend API, then (optional) frontend. For full step-by-step instructions see **[RUN.md](RUN.md)**.
+**Problem Statement 2:** Hackathon Challenge — **"Smart-Support" Ticket Routing Engine**
 
-### 1. Backend (API + worker)
+**Brief description:** Build an intelligent ticket routing system that automatically categorizes incoming support tickets (e.g. Billing, Technical, Legal), detects urgency using sentiment/ML, and routes them into a priority queue. The system should support single and batch submission, real-time activity tracking, and optional integration with agents and master incidents for high-volume or duplicate-ticket scenarios.
+
+---
+
+## Tech Stack
+
+| Layer    | Technologies |
+|----------|--------------|
+| **Backend** | Python 3.11+, FastAPI, Uvicorn, Pydantic, Redis, ARQ (async task queue), Transformers (DistilBERT), Sentence-Transformers, NumPy, SciPy |
+| **Frontend** | React 19, TypeScript, Vite 7, Tailwind CSS 4, React Router 7, TanStack Query 5 |
+| **UI**       | shadcn-style components (Button, Input, Card, Badge, etc.), class-variance-authority, Tailwind Merge |
+| **Infra**    | Redis (queue + pub/sub + state) |
+
+---
+
+## Steps to Run the Project Locally
+
+### Prerequisites
+
+- **Python 3.11 or 3.12** (recommended; 3.13 may need Cargo/Rust on PATH for some deps)
+- **Node.js** (for frontend)
+- **Redis** (or Memurai on Windows) running locally or a cloud Redis URL
+
+### 1. Clone and set up backend
 
 From the **project root**:
 
@@ -49,29 +63,45 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-**Start Redis** (required). Then in **Terminal 1**:
+### 2. Start Redis
+
+- **Windows:** Install [Memurai](https://www.memurai.com/get-memurai) or [Redis](https://github.com/microsoftarchive/redis/releases), then start the service or run `redis-server` / `memurai`.
+- **Mac/Linux:** Run `redis-server`.
+- **Cloud:** Use a Redis URL (e.g. Upstash) and set `REDIS_URL` before starting the app.
+
+Redis must be listening on `localhost:6379` (or set `REDIS_URL`).
+
+### 3. Start the API (Terminal 1)
+
+In the project root with the venv activated:
 
 ```bash
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-In **Terminal 2** (same venv):
+Wait until you see `Application startup complete.`
+
+### 4. Start the worker (Terminal 2)
+
+Same folder, same venv:
 
 ```bash
 python -m app.worker
 ```
 
-Leave both running. Tickets are accepted with 202 and processed by the worker into the queue.
+Leave this running so tickets are classified and enqueued.
 
-**Troubleshooting — "Cargo is not installed or is not on PATH" (pydantic-core):**  
-This can happen with Python 3.13 or when the build subprocess does not see Rust/Cargo.
+**If Redis is not on localhost:**
 
-- **Option A:** Add Cargo to your user PATH (e.g. `C:\Users\<You>\.cargo\bin` on Windows). Then reopen the terminal and run `pip install -r requirements.txt` again.
-- **Option B:** Use Python 3.11 or 3.12: `py -3.12 -m venv .venv` (or `python3.11`), then activate and `pip install -r requirements.txt`.
+```bash
+# Windows PowerShell
+$env:REDIS_URL = "redis://localhost:6379/0"
+python -m app.worker
+```
 
-### 2. Frontend (web UI)
+### 5. Run the frontend (Terminal 3)
 
-In a **second terminal**, from the project root:
+From the project root:
 
 ```bash
 cd frontend
@@ -79,53 +109,127 @@ npm install
 npm run dev
 ```
 
-Then open **http://localhost:5173** in your browser. The UI talks to the API at `http://localhost:8000` (override with `VITE_API_URL` if needed).
+Open **http://localhost:5173** in your browser. The UI uses the API at `http://localhost:8000` by default. To use a different API URL, create `frontend/.env` with:
+
+```
+VITE_API_URL=http://127.0.0.1:8000
+```
 
 ### Quick reference
 
-| What              | Command / URL |
-|-------------------|---------------|
-| Redis             | Start Redis/Memurai (see [RUN.md](RUN.md)) |
-| Backend           | `uvicorn app.main:app --reload --host 127.0.0.1 --port 8000` |
-| Worker            | `python -m app.worker` |
-| API docs          | http://localhost:8000/docs |
-| Frontend          | `cd frontend` → `npm install` → `npm run dev` |
-| Web UI            | http://localhost:5173 |
-| Activity (UI)     | http://localhost:5173/activity |
-
-Set `REDIS_URL` if Redis is not on localhost (e.g. `REDIS_URL=redis://localhost:6379/0`). Optional: set `WEBHOOK_URL` (Slack or Discord webhook) to notify when urgency score S > 0.8. **Milestone 3** adds optional env vars: `DEDUP_SIM_THRESHOLD`, `DEDUP_MIN_COUNT`, `DEDUP_WINDOW_SECONDS`, `TRANSFORMER_LATENCY_MS`, `CIRCUIT_COOLDOWN_SECONDS`, `ROUTING_LOAD_PENALTY_FACTOR` — see [MILESTONE3.md](MILESTONE3.md).
+| What        | Command / URL |
+|------------|----------------|
+| Redis      | Start Redis/Memurai (see [RUN.md](RUN.md)) |
+| Backend API| `uvicorn app.main:app --reload --host 127.0.0.1 --port 8000` |
+| Worker     | `python -m app.worker` |
+| API docs   | http://localhost:8000/docs |
+| Frontend   | `cd frontend` → `npm install` → `npm run dev` |
+| Web UI     | http://localhost:5173 |
 
 ---
 
-### API
+## Live Deployment
 
-| Method   | Endpoint        | Description |
-|----------|-----------------|-------------|
-| `POST`   | `/tickets`      | Submit ticket (JSON). Returns **202 Accepted** with `ticket_id`, `job_id`; worker enqueues when done. |
-| `POST`   | `/tickets/batch`| Submit multiple tickets (JSON array). Returns **202** with `accepted: [{ ticket_id, job_id }, ...]`. |
-| `GET`    | `/tickets/next` | Pop next highest-urgency ticket from processed queue. |
-| `GET`    | `/tickets/peek` | Peek next without removing. |
-| `GET`    | `/queue/size`   | Processed queue length. |
-| `GET`    | `/queue`        | List all waiting tickets in priority order (read-only). |
-| `DELETE` | `/queue`        | Clear processed queue. |
-| `GET`    | `/activity`     | Recent backend activity (`?limit=100`). Events: ticket_accepted, ticket_processed, ticket_popped, queue_cleared. |
-| `GET`    | `/health`       | Health check (includes circuit_breaker in M3). |
-| `POST`   | `/urgency-score`| Test urgency model (transformer or baseline via circuit breaker). |
-| `GET`    | `/incidents`    | List master incidents (M3). |
-| `GET`    | `/incidents/{id}` | Get one master incident (M3). |
-| `GET`    | `/metrics`      | Circuit breaker, incident count, online agents (M3). |
-| `POST`   | `/agents`       | Register/update agent (M3). |
-| `GET`    | `/agents`       | List agents (M3). |
-| `GET`    | `/assignments`  | Ticket → agent assignments (M3). |
+**Live deployment link:** [Add your working deployment URL here]
 
-**Example — submit a ticket:**
+*(Deploy the backend (e.g. Railway, Render) and frontend (e.g. Vercel, Netlify), then replace this line with the live frontend URL and ensure the API URL is set in the frontend environment.)*
 
-```bash
-curl -X POST http://localhost:8000/tickets \
-  -H "Content-Type: application/json" \
-  -d '{"ticket_id":"T-001","subject":"Login broken ASAP","body":"Cannot login. Need fix ASAP."}'
-# → 202 with job_id. After the worker runs, GET /tickets/next returns the classified ticket (category, urgency_score, etc.).
-```
+---
+
+## Screenshots of Working Application
+
+### 1. Dashboard / Home
+
+![Dashboard](screenshots/dashboard.png)
+
+*Dashboard with API status and backend connection.*
+
+### 2. Submit Ticket
+
+![Submit Ticket](screenshots/submit-ticket.png)
+
+*Submit single or batch tickets; form shows Ticket ID, Subject, Body, and optional Customer ID.*
+
+### 3. Queue & Activity
+
+![Queue and Activity](screenshots/queue-activity.png)
+
+*Queue view with priority-ordered tickets and pop/clear actions; Activity page with live event log.*
+
+**Note:** Add your own screenshots in the `screenshots/` folder as `dashboard.png`, `submit-ticket.png`, and `queue-activity.png` (or update the paths above). Minimum 3 screenshots required.
+
+---
+
+## Features Implemented vs Planned
+
+### Implemented
+
+| Feature | Description |
+|--------|-------------|
+| **Ticket classification** | Routes tickets into Billing, Technical, or Legal |
+| **Urgency detection** | Transformer-based sentiment (DistilBERT); continuous score S ∈ [0, 1]; regex baseline in tests |
+| **Priority queue** | Redis-backed processed queue; workers push classified tickets; API pops by urgency |
+| **Async processing** | ARQ worker: classification + sentiment; POST returns 202 with `job_id` |
+| **Single & batch submit** | `POST /tickets` and `POST /tickets/batch` with 202 and `job_id`(s) |
+| **Queue API** | Pop/peek next, queue size, list queue (read-only), clear queue |
+| **Activity stream** | In-memory log + Redis pub/sub; `GET /activity` with events: accepted, processed, popped, queue cleared |
+| **Web UI** | React app: Submit ticket (single/batch), Queue (size, list, pop, clear), Activity (live polling) |
+| **Test urgency** | UI and `POST /urgency-score` to test the urgency model |
+| **Health check** | `GET /health` (includes circuit breaker state in M3) |
+| **Semantic deduplication (M3)** | Sentence embeddings, sliding window, master incidents when >10 similar in 5 min |
+| **Circuit breaker (M3)** | Transformer calls via model router; fallback to regex baseline on latency/timeout |
+| **Skill-based routing (M3)** | Agent registry, skill vectors, capacity; ticket–agent assignment by best match |
+| **Incidents & agents API** | `GET /incidents`, `GET /agents`, `POST /agents`, `GET /assignments` |
+| **RBAC-ready** | Auth context and `RequireAuth` wrapper in place for future roles |
+
+### Planned / Incomplete
+
+| Feature | Status |
+|--------|--------|
+| **Login & authentication** | Not implemented; RBAC structure only |
+| **Role-based access control** | Prepared in frontend; no roles or permissions yet |
+| **Optional webhook** | `WEBHOOK_URL` (Slack/Discord) for high-urgency and master incidents is supported in backend; needs configuration for live use |
+
+---
+
+## Implementation Overview (Backend & Frontend)
+
+### Backend
+
+- **Classifier:** Billing / Technical / Legal; urgency from transformer-based sentiment (S ∈ [0, 1]); regex baseline in tests.
+- **Queue:** Redis-backed processed queue; workers push classified tickets; API pops by urgency. ARQ worker does classification + sentiment.
+- **API:** FastAPI with CORS. `POST /tickets` and `POST /tickets/batch` return 202 with `job_id`; worker enqueues when done. Endpoints: submit (single/batch), pop/peek next, queue size, list queue, clear queue, `GET /activity`, health.
+- **Activity:** In-memory activity log plus Redis pub/sub; worker publishes `ticket_processed` for a unified event stream.
+- **Data:** Redis for job queue and processed list; no DB/file persistence for ticket content.
+
+### Frontend
+
+- **Stack:** React 19, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query. shadcn-style components.
+- **Pages:** Submit ticket (single/batch), Queue (size, list, pop, clear, auto-refresh), Activity (live event log, poll every 2s).
+- **API client:** Typed client with configurable base URL and optional auth token getter for future auth.
+
+---
+
+## API Summary
+
+| Method   | Endpoint         | Description |
+|----------|------------------|-------------|
+| `POST`   | `/tickets`       | Submit ticket. Returns 202 with `ticket_id`, `job_id`. |
+| `POST`   | `/tickets/batch` | Submit multiple tickets. Returns 202 with `accepted: [{ ticket_id, job_id }, ...]`. |
+| `GET`    | `/tickets/next`  | Pop next highest-urgency ticket. |
+| `GET`    | `/tickets/peek`  | Peek next without removing. |
+| `GET`    | `/queue/size`    | Processed queue length. |
+| `GET`    | `/queue`         | List all waiting tickets in priority order (read-only). |
+| `DELETE` | `/queue`         | Clear processed queue. |
+| `GET`    | `/activity`      | Recent backend activity (`?limit=100`). |
+| `GET`    | `/health`        | Health check. |
+| `POST`   | `/urgency-score` | Test urgency model. |
+| `GET`    | `/incidents`     | List master incidents (M3). |
+| `GET`    | `/incidents/{id}`| Get one master incident (M3). |
+| `GET`    | `/metrics`       | Circuit breaker, incident count, online agents (M3). |
+| `POST`   | `/agents`        | Register/update agent (M3). |
+| `GET`    | `/agents`        | List agents (M3). |
+| `GET`    | `/assignments`   | Ticket → agent assignments (M3). |
 
 ---
 
@@ -140,8 +244,8 @@ pytest tests/test_unit.py -v
 **API tests (server must be running):**
 
 ```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000
-# In another terminal:
+# Terminal 1: uvicorn app.main:app --host 127.0.0.1 --port 8000
+# Terminal 2:
 pytest tests/test_milestone1.py -v
 ```
 
@@ -149,13 +253,11 @@ Or use `python scripts/run_tests_live.py` to start the server, run tests, then s
 
 ---
 
-## Project layout
+## Project Layout
 
 - `app/` — FastAPI app: `main.py`, `models.py`, `classifier.py`, `queue_store.py`, `broker.py`, `config.py`, `sentiment.py`, `worker.py`, `activity.py`, `webhook.py`
 - `frontend/` — React SPA (Vite, TypeScript, Tailwind)
 - `tests/` — Unit and API tests
 - `scripts/` — Helpers (e.g. run tests against live server)
 - `RUN.md` — Detailed run instructions (Redis, API, worker)
-- `MILESTONE1.md` — MVR (in-memory) spec and verification.
-- `MILESTONE2.md` — Intelligent Queue (async broker, transformer urgency, webhook).
-- `MILESTONE3.md` — Autonomous Orchestrator (semantic dedup, circuit breaker, skill-based routing).
+- `MILESTONE1.md`, `MILESTONE2.md`, `MILESTONE3.md` — Specs and verification
